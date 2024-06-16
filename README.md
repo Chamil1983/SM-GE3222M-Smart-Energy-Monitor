@@ -3,4 +3,4 @@
 
 SM Energy Overview
 
-![Display-Type-B](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Pictures/IMG_2.jpg?raw=true)
+![Display-Type-B](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Pictures/IMG_3.jpg?raw=true)
