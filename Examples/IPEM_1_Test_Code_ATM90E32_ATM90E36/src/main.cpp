@@ -100,8 +100,6 @@
   * DAC Sinewave Test Mode Loop (Default 10 Hz)
   * DAC Stepped Voltages Test Mode Loop (Slow Staircase)
 
-  Enjoy!  Dave Williams, DitroniX.net
-
   Remember!
   * Set the BOARD to ESP32, 'WEMOS D1 MINI ESP32' DEV Module (or similar).
   * You may set the BAUD rate to 921600 to speed up flashing.
