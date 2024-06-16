@@ -1,21 +1,19 @@
 /*
-  Dave Williams, DitroniX 2019-2023 (ditronix.net)
+  
   IPEM-1 ESP32 ATM90E32 ATM90E36 IoT Power Energy Monitoring Energy Monitor v1.0
   Features include ESP32 IPEM ESP32 ATM90E32 ATM90E36 16bit ADC EEPROM 3Phase 3+1 CT-Clamps Current Voltage Frequency Power Factor GPIO I2C OLED SMPS D1 USB
   PCA 1.2302-20x - Test Code Firmware v1 - Development Code - WORK-IN-PROGRESS - 16th June 2023
 
-  The purpose of this test code is to cycle through the various main functions of the board, as shown below, as part of board bring up testing.
+  The purpose of this test code is to cycle through the various main functions of the board, as shown below, as part of board bring-up testing.
 
-    > FIRMWARE CONFIGURATION INFO WIKI > https://github.com/DitroniX/IPEM-IoT-Power-Energy-Monitor/wiki/Firmware-Configuration-and-Flashing
 
-  This software has expanded way past it's original bring-up task and is now quite comprehensive.  It can now be, as is, used for both bring-up, final use and pubishing. Else, simply use the bits you like!
+  This software has expanded way past it's original bring-up task and is now quite comprehensive.  It can now be, as is, used for both bring-up, final use, and publishing. Otherwise, simply use the bits you like!
 
-  A number of software switches are used, throughout.  The defalts are listed below.  You shold be able to just compile this current version to an IPEM ATM90E32 and see some valid results in the serial monitor / OLED.
+  Several software switches are used, throughout.  The defaults are listed below.  You shold be able just to compile this current version to an IPEM ATM90E32 and see some valid results in the serial monitor / OLED.
 
   Board Bring Up Test - ATM90E3x Test Routines (Output sent to the Serial Print - ONLY ON BOOT! Press RESET or HOLD USR Button to REFRESH)
 
-  Base 90E32/36 register formulation based on the excellent ground work from Tisham Dhar, whatnick | ATM90E32 ATM90E36 Energy Monitor Core
-  VSCode base, E32/E36 Registers/Code Merged, Updated, Software Logic/Routines, Bring Up Firmware, Comprehensive Functions, OTA and Domoticz Integration by Date Williams
+  Base 90E32/36 register formulation based on the excellent groundwork from Dave Williams, Tisham Dhar, whatnick | ATM90E32 ATM90E36 Energy Monitor Core
 
    **CONFIGURATION** (Setup for bring-up testing of the board)
 
@@ -115,7 +113,9 @@
   This test code is OPEN SOURCE and formatted for easier viewing.  Although is is not intended for real world use, it may be freely used, or modified as needed.
   It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
-  Further information, details and code examples can be found on our website wiki pages ditronix.net/wiki and on github.com/DitroniX
+  ***IMPORTANT: Please configure ESP PIN settings Before Start ***
+  Refer ESP32 Pin Configuration File for referance
+  
 */
 
 // Libraries
