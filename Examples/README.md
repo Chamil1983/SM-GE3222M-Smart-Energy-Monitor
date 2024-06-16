@@ -2,7 +2,7 @@
 
 ------------
 
-**NEW FIRMWARE**: [**FliX**](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Firmware Released/) is an Integrated Firmware for SM-GE3222M Power Energy Monitor SDK Boards
+**NEW FIRMWARE**: [**FliX**](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Firmware_Released/) is an Integrated Firmware for SM-GE3222M Power Energy Monitor SDK Boards
 
 *** IMPORTANT: This folder contains the IPEM Example Source Code. This is not the real Code Only for Reference
 
