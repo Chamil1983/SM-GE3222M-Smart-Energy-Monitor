@@ -1,4 +1,4 @@
-**IPEM ESP32 ATM90E32 ATM90E36 IoT Power Energy Monitor**
+**SM-GE3222M ESP32 ATM90E32/ATM90E36 Smart IoT Power Energy Monitor**
 
 ------------
 
