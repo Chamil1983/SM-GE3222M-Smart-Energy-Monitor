@@ -244,7 +244,9 @@ Always ensure proper safety precautions when working with electrical systems. Al
 
 ## 📧 Contact & Support
 -Purchase: [SM Energy GE3222M on eBay](https://www.ebay.com.au/itm/364952547719)
+
 -Technical Support: Open an issue on this repository
+
 -Contact: Chamil Vithanage, Microcode Embedded Solutions, Australia
 
 For technical support, please contact MESA:
