@@ -221,9 +221,7 @@ See Example Code https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/b
 For more detailed setup instructions, see the ![Getting Started Guide](Documentation/GettingStarted.md).
 
 - Compatible CT Clamps ![Compatible CT Clamps](Pictures/compatibility.jpg)
-<p align="center">
-<img src="Pictures/compatibility.jpg" alt="Board Layout" width="600"/>
-</p>
+
 
 Additional information and other technical details on this project may be found in the related repository pages.
 
