@@ -257,6 +257,7 @@ For technical support, please contact MESA:
 For issues related to this repository, please open an issue on GitHub.
 
 ---
+© 2025 Microcode Embedded Solutions | Electronics Engineer | Software Developer | R&D Support
 
 <p align="center">
   <img src="LOGO/MESA_logo.png" alt="MESA Logo" width="200"/><br>
@@ -268,4 +269,4 @@ For issues related to this repository, please open an issue on GitHub.
 
 Electronics Engineer | Software Developer | R&D Support | RF Engineering | Product Certification and Testing 
 
-© 2025 Microcode Embedded Solutions | Electronics Engineer | Software Developer | R&D Support
+
