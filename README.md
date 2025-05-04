@@ -87,6 +87,8 @@ SM-GE3222M-Smart-Energy-Monitor/
 ├── LICENSE
 └── README.md
 
+```
+
 
 ![Display-Type-B](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Pictures/IMG_3.jpg?raw=true)
 
