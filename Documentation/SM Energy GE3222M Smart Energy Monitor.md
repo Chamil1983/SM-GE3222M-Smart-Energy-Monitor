@@ -1,7 +1,10 @@
 # SM Energy GE3222M Smart Energy Monitor - GitHub Repository Structure
 
+<p align="center">
+<img src="/Pictures/IMG_4798.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="500"/>
 
-<img src="/Pictures/IMG_4798.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="450"/>
+  <img src="/Pictures/Main_Board.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="500"/>
+</p>
 
 ## Overview
 
