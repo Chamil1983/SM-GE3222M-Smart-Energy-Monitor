@@ -203,12 +203,12 @@ See Example Code https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/b
 For more detailed setup instructions, see the [Getting Started Guide](Documentation/GettingStarted.md).
 
 <p align="center">
-<img src="Pictures/Design_Drawing.jpg" alt="Board Layout" width="600"/>
+<img src="Pictures/Compatibility.png" alt="Board Layout" width="600"/>
 </p>
 
 ## **Further Information**
 
-Additional information, and other technical details on this project, may be found in the related repository pages.
+Additional information and other technical details on this project may be found in the related repository pages.
 
 **Repository Folders**
 
@@ -223,10 +223,10 @@ Additional information, and other technical details on this project, may be foun
  - **Issues** *(Related Repository Technical Issues and Fixes)*
 
 
-**To buy this product please go to the link below;**
+**To buy this product, please go to the link below:**
 https://www.ebay.com.au/itm/364952547719
 
-We value our Customers, Users of our designs, and STEM Communities, all over the World. Should you have any other questions, or feedback to share with others, please feel free to:
+We value our Customers, Users of our designs, and STEM Communities all over the World. Should you have any other questions or feedback to share with others, please feel free to:
 
 ***Chamil Vithanage, Microcode Embedded Solutions, Australia.***
 
