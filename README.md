@@ -12,6 +12,11 @@ The SM Energy GE3222M is a flexible dual-purpose smart energy monitoring solutio
 
 <p align="center">
 <img src="Pictures/IMG_3.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="400"/>
+
+<img src="Pictures/IMG_4798.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="400"/>
+
+<img src="Pictures/IMG_4800.jpg" alt="Cortex Link A8F-M ESP32 Smart Relay Board" width="400"/>
+  
 </p>
 ![Display-Type-B](https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Pictures/IMG_3.jpg?raw=true)
 
