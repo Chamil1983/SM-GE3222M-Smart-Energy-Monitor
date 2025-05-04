@@ -1,4 +1,4 @@
-## SM Energy ESP32 based ATM90E36A Arduino Programmable Smart Energy Monitor Model SM-GE3222M
+## SM Energy ESP32 based ATM90E36A Arduino Programmable Smart Energy Monitor (Model SM-GE3222M)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino Compatible](https://img.shields.io/badge/Arduino-Compatible-blue.svg)](https://www.arduino.cc/)
@@ -202,14 +202,16 @@ All test code is OPEN SOURCE and although it is not intended for real-world use,
 
 See Example Code https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Examples/
 
+
+
+## **Further Information**
+
 For more detailed setup instructions, see the ![Getting Started Guide](Documentation/GettingStarted.md).
 
-- Compatible CT Clamps ![pinout documentation](Pictures/compatibility.jpg)
+- Compatible CT Clamps ![Compatible CT Clamps](Pictures/compatibility.jpg)
 <p align="center">
 <img src="Pictures/compatibility.jpg" alt="Board Layout" width="600"/>
 </p>
-
-## **Further Information**
 
 Additional information and other technical details on this project may be found in the related repository pages.
 
