@@ -202,6 +202,10 @@ See Example Code https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/b
 
 For more detailed setup instructions, see the [Getting Started Guide](Documentation/GettingStarted.md).
 
+<p align="center">
+<img src="Pictures/Design_Drawing.jpg" alt="Board Layout" width="600"/>
+</p>
+
 ## **Further Information**
 
 Additional information, and other technical details on this project, may be found in the related repository pages.
