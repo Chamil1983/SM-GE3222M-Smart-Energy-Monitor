@@ -243,11 +243,11 @@ This project is distributed under the MIT License. See the [LICENSE](LICENSE) fi
 Always ensure proper safety precautions when working with electrical systems. All electrical connections should be made by a qualified electrician in compliance with local regulations
 
 ## 📧 Contact & Support
--Purchase: [SM Energy GE3222M on eBay](https://www.ebay.com.au/itm/364952547719)
+- Purchase: [SM Energy GE3222M on eBay](https://www.ebay.com.au/itm/364952547719)
 
--Technical Support: Open an issue on this repository
+- Technical Support: Open an issue on this repository
 
--Contact: Chamil Vithanage, Microcode Embedded Solutions, Australia
+- Contact: Chamil Vithanage, Microcode Embedded Solutions, Australia
 
 For technical support, please contact MESA:
 
