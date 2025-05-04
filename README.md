@@ -225,25 +225,45 @@ For more detailed setup instructions, see the ![Getting Started Guide](Documenta
 
 Additional information and other technical details on this project may be found in the related repository pages.
 
+## 🤝 Contributing
+
+Contributions to improve the code examples, documentation, or add new features are welcome. Please see [CONTRIBUTING.md](Documentation/CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+This project is distributed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
 **Repository Folders**
 
  - **Code** *(Code examples for Arduino  IDE and Visual Studio)*
- -  **Datasheets and Information** *(Component Datasheets, Photos and Technical Documentation)*
+ - **Datasheets and Information** *(Component Datasheets, Photos and Technical Documentation)*
  - **Certification** *(Related Repository Project or Part, Certification Information)*
 
-**Repository Tabs**
+## ⚠️ Safety Warning
 
- - **Wiki** *(Related Repository Wiki pages and Technical User Information)*
- - **Discussions** *(Related Repository User Discussion Forum)*
- - **Issues** *(Related Repository Technical Issues and Fixes)*
+Always ensure proper safety precautions when working with electrical systems. All electrical connections should be made by a qualified electrician in compliance with local regulations
 
+## 📧 Contact & Support
+-Purchase: [SM Energy GE3222M on eBay](https://www.ebay.com.au/itm/364952547719)
+-Technical Support: Open an issue on this repository
+-Contact: Chamil Vithanage, Microcode Embedded Solutions, Australia
 
-**To buy this product, please go to the link below:**
-https://www.ebay.com.au/itm/364952547719
+For technical support, please contact MESA:
 
-We value our Customers, Users of our designs, and STEM Communities all over the World. Should you have any other questions or feedback to share with others, please feel free to:
+- **Website:** [www.microcodeeng.com](https://www.microcodeeng.com)
+- **Email:** microcode-eng@outlook.com
+
+For issues related to this repository, please open an issue on GitHub.
+
+---
+
+<p align="center">
+  <img src="LOGO/MESA_logo.png" alt="MESA Logo" width="200"/><br>
+
+  <I align="center">Designed and manufactured by Microcode Embedded Systems and Automation (MESA)</i>
+</p>
 
 ***Chamil Vithanage, Microcode Embedded Solutions, Australia.***
 
 Electronics Engineer | Software Developer | R&D Support | RF Engineering | Product Certification and Testing 
 
+© 2025 Microcode Embedded Solutions | Electronics Engineer | Software Developer | R&D Support
