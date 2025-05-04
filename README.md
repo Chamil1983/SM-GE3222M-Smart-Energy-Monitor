@@ -200,6 +200,8 @@ void loop() {
   delay(1000);
 }
 
+```
+
 All test code is OPEN SOURCE and although it is not intended for real-world use, it may be freely used, or modified as needed.  It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
 See Example Code https://github.com/Chamil1983/SM-GE3222M-Smart-Energy-Monitor/blob/main/Examples/
