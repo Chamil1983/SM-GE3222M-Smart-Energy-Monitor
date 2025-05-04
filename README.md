@@ -3,7 +3,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Arduino Compatible](https://img.shields.io/badge/Arduino-Compatible-blue.svg)](https://www.arduino.cc/)
 [![ESP32](https://img.shields.io/badge/ESP32-WROOM32-red.svg)](https://www.espressif.com/)
-
+[![ESPHome Compatible](https://img.shields.io/badge/ESPHome-Compatible-green.svg)](https://esphome.io/)
+[![Home Assistant Compatible](https://img.shields.io/badge/Home_Assistant-Compatible-green.svg)](https://www.home-assistant.io/)
+[![Release Version](https://img.shields.io/badge/Release-v1.0.0-green.svg)](https://github.com/mesa-automation/cortex-link-a8r-m/releases)
 ## 📌 Overview
 
 The SM Energy GE3222M is a flexible dual-purpose smart energy monitoring solution based on the ESP32 platform with ATM90E32/ATM90E36 Energy ICs. It provides accurate measurement of voltage, current, power, energy, and power quality parameters for single and three-phase electrical systems.
