@@ -9,7 +9,7 @@
 The SM Energy GE3222M is a flexible dual-purpose smart energy monitoring solution based on the ESP32 platform with ATM90E32/ATM90E36 Energy ICs. It provides accurate measurement of voltage, current, power, energy, and power quality parameters for single and three-phase electrical systems.
 
 ## 🔍 Repository Contents
-
+```
 SM-GE3222M-Smart-Energy-Monitor/
 ├── Documentation/
 │   ├── images/
