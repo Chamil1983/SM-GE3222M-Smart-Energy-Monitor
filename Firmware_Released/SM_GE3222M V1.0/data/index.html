@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<style>
+h1 {
+font-family:Arial;
+  text-align: center;
+    font-size: 2rem;
+    color: white;
+    background-color:rgba(71, 209, 255, 0.553);
+    color:MidnightBlue;
+  
+}
+
+h2 {
+
+  font-family:Arial;
+}
+
+h3 {
+  text-align: center;
+  font-family:Arial;
+}
+
+  <meta charset="utf-8">
+  <title>SM-Energy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="SMEnergy">
+  <meta name="author" content="SMEnergy">
+  <meta name="theme-color" content="#000000" />
+  <link rel="stylesheet" type="text/css" href="style.css">
+  
+</style>
+</head>  
+    
+<body>
+
+    <div class="topnav">
+      <h1>SM<span>Energy</span></h1>
+      <h3>WiFi SM-Energy Link for SM-GE3222M Energy Meters </h3>
+    </div>
+    
+      <style>
+		table, th, td {
+  		border:2px solid black;
+		}
+        
+        th, td {
+        
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: 20px;
+  padding-right: 20px;
+  
+  font-family:Arial;
+}
+        
+        
+		</style>
+
+
+        <h2>1. System Information</h2>
+       <table style="width:80%">
+  <tr>
+    <th style="font-family:Arial">Meter Parameter</th>
+    <th style="font-family:Arial">Description</th>
+
+  </tr>
+  
+    <tr>
+    <td><b>Vendor Name:</b></td>
+    <td><span id="vendorname"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Product Code</b></td>
+    <td><span id="productcode"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Revision Number</b></td>
+    <td><span id="rev_no"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Meter Name</b></td>
+    <td><span id="meter_name"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Meter Model</b></td>
+    <td><span id="model"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Manufacturer</b></td>
+    <td><span id="manufacturer"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Serial Number</b></td>
+    <td><span id="serial_no"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Hardware Revision</b></td>
+    <td><span id="hardware_rev"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Firmware Version</b></td>
+    <td><span id="firmware_ver"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>MAC Address</b></td>
+    <td><span id="mac_add"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Node Name</b></td>
+    <td><span id="node"></span></td>
+  	</tr>
+       
+    <tr>
+    <td><b>Node ID</b></td>
+    <td><span id="node_ID"></span></td>
+  	</tr>
+    </table>
+    
+    
+     <h2>2. WiFi Network</h2>
+        <div class="itembody-wrapper">
+          
+          
+            <table>
+              <tr>
+                <th>Network</th>
+                <th>IP Address</th>
+                
+              </tr>
+
+              <tr>
+              
+              <td><span id="ssid"></span></td>
+               <td><span id="ipaddress"></span></td>
+                
+              </tr>
+
+
+            </table>
+           
+          </div>
+
+     
+            
+
+<a href="callibration.html">
+    <button>Configuration</button>
+</a>
+
+<a href="readings.html">
+    <button>Meter Read</button>
+</a>
+            
+            
+          		<button id="restart">Restart</button>
+          		<button id="reset">Factory Reset</button>
+       
+
+  
+      	<script src="lib.js" type="text/javascript"></script>
+  		<script src="config.js" type="text/javascript"></script>
+ 
+              <script src="script.js"></script>
+
+
+</body>
+</html>
+
+

@@ -1,0 +1,18 @@
+{
+  "Page_Name": "Cal_4",
+  "Trans": null,
+  "UgainA": 7143,
+  "IgainA": 45578,
+  "UoffsetA": 0,
+  "IoffsetA": 0,
+  "UgainB": 7171,
+  "IgainB": 45578,
+  "UoffsetB": 0,
+  "IoffsetB": 0,
+  "UgainC": 7180,
+  "IgainC": 45578,
+  "UoffsetC": 0,
+  "IoffsetC": 0,
+  "IgainN": 33500,
+  "IoffsetN": 0
+}

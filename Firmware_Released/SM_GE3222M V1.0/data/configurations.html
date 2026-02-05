@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<style>
+h1 {
+font-family:Arial;
+  text-align: center;
+    font-size: 2rem;
+    color: white;
+    background-color:rgba(71, 209, 255, 0.553);
+    color:MidnightBlue;
+}
+
+h2 {
+
+  font-family:Arial;
+}
+
+h3 {
+  text-align: center;
+  font-family:Arial;
+}
+
+        th, td {
+        
+  padding-top: 5px;
+  padding-bottom: 5px;
+  padding-left: 20px;
+  padding-right: 20px;
+  
+  font-family:Arial;
+}
+
+  <meta charset="utf-8">
+  <title>SM-Energy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="SMEnergy">
+  <meta name="author" content="SMEnergy">
+  <meta name="theme-color" content="#000000"/>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  
+  
+</style>
+</head>  
+
+    
+<body>
+
+    <div class="topnav">
+      <h1>SM<span>Energy</span></h1>
+      <h3>WiFi SM-Energy Link for SM-FE102M Energy Meters </h3>
+    </div>
+    
+      <style>
+		table, th, td {
+  		border:2px solid black;
+        font-family:Arial;
+		}
+        
+		</style>
+
+
+        <h2>2. Configuration Settings</h2>
+       <table style="width:80%">
+  <tr>
+    <th>Meter Parameter</th>
+    <th>Current Settings</th>
+    <th>Callibration Setting</th>
+
+  </tr>
+  
+    <tr>
+    <td><b>Voltage Sag Threshold</b></td>
+    <td><span id="vsagthe"></span></td>
+    <td><input type="number" id="vsagthetxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>L-Line Calibration Gain</b></td>
+    <td><span id="Llinegain"></span></td>
+    <td><input type="number" id="Llinegaintxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>L-Line Calibration Angle</b></td>
+    <td><span id="Llineang"></span></td>
+    <td><input type="number" id="Llineangtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>N-Line Calibration Gain</b></td>
+    <td><span id="Nlinegain"></span></td>
+    <td><input type="number" id="Nlinegaintxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>N-Line Calibration Angle</b></td>
+    <td><span id="Nlineang"></span></td>
+    <td><input type="number" id="Nlineangtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Active Startup Power Threshold</b></td>
+    <td><span id="actstartpowthr"></span></td>
+    <td><input type="number" id="actstartpowthrtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Active NoLoad Power Threshold</b></td>
+    <td><span id="actnoldpwrthr"></span></td>
+    <td><input type="number" id="actnoldpwrthrtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Reactive Startup Power Threshold</b></td>
+    <td><span id="reactstartpwrthr"></span></td>
+    <td><input type="number" id="reactstartpwrthrtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Reactive NoLoad Power Threshold</b></td>
+    <td><span id="reactnoldpwrthr"></span></td>
+    <td><input type="number" id="reactnoldpwrthrtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Voltage RMS Gain</b></td>
+    <td><span id="vrmsgain"></span></td>
+    <td><input type="number" id="vrmsgaintxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>L-Line Current RMS Gain</b></td>
+    <td><span id="Llinecurrmsgain"></span></td>
+    <td><input type="number" id="Llinecurrmsgaintxt" value=""></td>
+  	</tr>
+       
+    <tr>
+    <td><b>N-Line Current RMS Gain</b></td>
+    <td><span id="Nlinecurrmsgain"></span></td>
+    <td><input type="text" id="Nlinecurrmsgaintxt" value=""></td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Voltage Offset</b></td>
+    <td><span id="voffset"></span></td>
+    <td><input type="number" id="voffsettxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>L-Line Current Offset</b></td>
+    <td><span id="Llinecuroffset"></span></td>
+    <td><input type="number" id="Llinecuroffsettxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>N-Line Current Offset</b></td>
+    <td><span id="Nlinecuroffset"></span></td>
+    <td><input type="number" id="Nlinecuroffsettxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>L-Line Active Power Offset</b></td>
+    <td><span id="Llineactpwtoffset"></span></td>
+    <td><input type="number" id="Llineactpwtoffsettxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>L-Line Reactive Power Offset</b></td>
+    <td><span id="Llinereactpwroffset"></span></td>
+    <td><input type="number" id="Llinereactpwroffsettxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>N-Line Active Power Offset</b></td>
+    <td><span id="Nlineactpwroffset"></span></td>
+    <td><input type="number" id="Nlineactpwroffsettxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>N-Line Reactive Power Offset</b></td>
+    <td><span id="Nlinereactpwroffset"></span></td>
+
+    <td><input type="number" id="Nlinereactpwroffsettxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>CRC1</b></td>
+    <td><span id="crc1"></span></td>
+
+    <td><input type="number" id="crc1txt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>CRC2</b></td>
+    <td><span id="crc2"></span></td>
+
+    <td><input type="number" id="crc2txt" value=""></td>
+  	</tr>
+    
+
+    </table>
+            
+<p></p>
+
+<a href="index.html">
+    <button>Home</button>
+</a>
+
+
+<button type='button' id="setCallibration">Save Config</button>
+
+            
+            
+<script src="script.js"></script>
+
+
+</body>
+</html>

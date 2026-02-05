@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<style>
+h1 {
+font-family:Courier New;
+  text-align: center;
+    font-size: 2rem;
+    color: white;
+    background-color:rgba(71, 209, 255, 0.553);
+    color:MidnightBlue;
+}
+
+h2 {
+
+  font-family:Courier New;
+}
+
+h3 {
+  text-align: center;
+  font-family:Courier New;
+}
+
+        th, td {
+        
+  padding-top: 2px;
+  padding-bottom: 2px;
+  padding-left: 20px;
+  padding-right: 20px;
+  
+  font-family:Courier New;
+}
+
+  <meta charset="utf-8">
+  <title>SM-Energy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="SMEnergy">
+  <meta name="author" content="SMEnergy">
+  <meta name="theme-color" content="#000000"/>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  
+  
+</style>
+</head>   
+
+    
+<body>
+
+    <div class="topnav">
+      <h1>SMEnergy</h1>
+      <h3>WiFi SM-Energy Link for SM-GE3222M Energy Meters </h3>
+       <h3>SM-GE3222M Energy Readings </h3>
+      
+    </div>
+    
+      <style>
+		table, th, td {
+  		border:1px solid black;
+		}
+		</style>
+
+
+        <h2>3. Meter Readings</h2>
+        
+       <table style="width:60%">
+  <tr>
+    <th>Energy Reading Parameters</th>
+    <th>Current Reading</th>
+
+
+  </tr>
+  
+    <tr>
+    <td><b>Total Forward Active Energy</b></td>
+    <td><span id="APenergyT"></span>kWh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Forward Active Energy</b></td>
+    <td><span id="APenergyA"></span>kWh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha B Forward Active Energy</b></td>
+    <td><span id="APenergyB"></span>kWh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha C Forward Active Energy</b></td>
+    <td><span id="APenergyC"></span>kWh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Total ReverseActive Energy</b></td>
+    <td><span id="ANenergyT"></span>kWh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha A Reverse Active Energy</b></td>
+    <td><span id="ANenergyA"></span>kWh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Reverse Active Energy</b></td>
+    <td><span id="ANenergyB"></span>kWh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Reverse Active Energy</b></td>
+    <td><span id="ANenergyC"></span>kWh</td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Total Forward Reactive Energy</b></td>
+    <td><span id="RPenergyT"></span>kvarh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Forward Reactive Energy</b></td>
+    <td><span id="RPenergyA"></span>kvarh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha B Forward Reactive Energy</b></td>
+    <td><span id="RPenergyB"></span>kvarh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha C Forward Reactive Energy</b></td>
+    <td><span id="RPenergyC"></span>kvarh</td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Total Reverse Reactive Energy</b></td>
+    <td><span id="RNenergyT"></span>kvarh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Reverse Reactive Energy</b></td>
+    <td><span id="RNenergyA"></span>kvarh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha B Reverse Reactive Energy</b></td>
+    <td><span id="RNenergyB"></span>kvarh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Reverse Reactive Energy</b></td>
+    <td><span id="RNenergyC"></span>kvarh</td>
+  	</tr>
+    
+    
+    
+    <tr>
+    <td><b>Total Apparent Energy (Arithmetic Sum)</b></td>
+    <td><span id="SAenergyT"></span>kVAh</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Total Apparent Energy(Vector Sum )</b></td>
+    <td><span id="SVenergyT"></span>kVAh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Apparent Energy</b></td>
+    <td><span id="SenergyA"></span>kVAh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Apparent Energy</b></td>
+    <td><span id="SenergyB"></span>kVAh</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Apparent Energy</b></td>
+    <td><span id="SenergyC"></span>kVAh</td>
+  	</tr>
+    
+     <tr>
+    <td><b>Total Active Power (Phase sum)</b></td>
+    <td><span id="PmeanT"></span>kW</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Active Power</b></td>
+    <td><span id="PmeanA"></span>kW</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha B Active Power</b></td>
+    <td><span id="PmeanB"></span>kW</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha C Active Power</b></td>
+    <td><span id="PmeanC"></span>kW</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Total Reactive Power (Phase sum)</b></td>
+    <td><span id="QmeanT"></span>kvar</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha A Reactive Power</b></td>
+    <td><span id="QmeanA"></span>kvar</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Reactive Power</b></td>
+    <td><span id="QmeanB"></span>kvar</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Reactive Power</b></td>
+    <td><span id="QmeanC"></span>kvar</td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Total Apparent Power (Arithmetic Sum)</b></td>
+    <td><span id="SAmeanT"></span>kVA</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Total Apparent Power (Vector Sum)</b></td>
+    <td><span id="SVmeanT"></span>kVA</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Apparent Power</b></td>
+    <td><span id="SmeanA"></span>kVA</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Apparent Power</b></td>
+    <td><span id="SmeanB"></span>kVA</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Apparent Power</b></td>
+    <td><span id="SmeanC"></span>kVA</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Total Power Factor</b></td>
+    <td><span id="PFmeanT"></span></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha A Power Factor</b></td>
+    <td><span id="PFmeanA"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Power Factor</b></td>
+    <td><span id="PFmeanB"></span></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Power Factor</b></td>
+    <td><span id="PFmeanC"></span></td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Total Active Fundamental Power</b></td>
+    <td><span id="PmeanTF"></span>W</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha A Active Fundamental Power</b></td>
+    <td><span id="PmeanAF"></span>W</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Active Fundamental Power</b></td>
+    <td><span id="PmeanBF"></span>W</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha C Active Fundamental Power</b></td>
+    <td><span id="PmeanCF"></span>W</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Total Active Harmonic Power</b></td>
+    <td><span id="PmeanTH"></span>W</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha A Active Harmonic Power</b></td>
+    <td><span id="PmeanAH"></span>W</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha B Active Harmonic Power</b></td>
+    <td><span id="PmeanBH"></span>W</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha C Active Harmonic Power</b></td>
+    <td><span id="PmeanCH"></span>W</td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>N Line Sampled Current RMS</b></td>
+    <td><span id="IrmsN1"></span>A</td>
+  	</tr>
+    
+        <tr>
+    <td><b>N Line Calculated Current RMS</b></td>
+    <td><span id="IrmsN0"></span>A</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha A Current RMS</b></td>
+    <td><span id="IrmsA"></span>A</td>
+  	</tr>
+    
+                <tr>
+    <td><b>Pha B Current RMS</b></td>
+    <td><span id="IrmsB"></span>A</td>
+  	</tr>
+    
+                <tr>
+    <td><b>Pha C Current RMS</b></td>
+    <td><span id="IrmsC"></span>A</td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Pha A Voltage RMS</b></td>
+    <td><span id="UrmsA"></span>V</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha B Voltage RMS</b></td>
+    <td><span id="UrmsB"></span>V</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha C Voltage RMS</b></td>
+    <td><span id="UrmsC"></span>A</td>
+  	</tr>
+    
+    
+
+          <tr>
+    <td><b>Pha A Voltage THDN</b></td>
+    <td><span id="THDNUA"></span>V</td>
+  	</tr>
+  
+  
+            <tr>
+    <td><b>Pha B Voltage THDN</b></td>
+    <td><span id="THDNUB"></span>V</td>
+  	</tr>
+    
+              <tr>
+    <td><b>Pha C Voltage THDN</b></td>
+    <td><span id="THDNUC"></span>V</td>
+  	</tr>
+    
+    
+              <tr>
+    <td><b>Pha A Current THDN</b></td>
+    <td><span id="THDNIA"></span>A</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Current THDN</b></td>
+    <td><span id="THDNIB"></span>A</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha C Current THDN</b></td>
+    <td><span id="THDNIC"></span>A</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Frequency</b></td>
+    <td><span id="Freq"></span>Hz</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha A Mean Phase Angle</b></td>
+    <td><span id="PAngleA"></span>deg</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Pha B Mean Phase Angle</b></td>
+    <td><span id="PAngleB"></span>deg</td>
+  	</tr>
+    
+        <tr>
+    <td><b>Pha C Mean Phase Angle</b></td>
+    <td><span id="PAngleC"></span>deg</td>
+  	</tr>
+    
+    <tr>
+    <td><b>Measured Temperature</b></td>
+    <td><span id="Temp"></span>°C</td>
+  	</tr>
+    
+            <tr>
+    <td><b>Pha A VoltagePhase Angle</b></td>
+    <td><span id="UangleA"></span>deg</td>
+  	</tr>
+    
+                <tr>
+    <td><b>Pha B VoltagePhase Angle</b></td>
+    <td><span id="UangleB"></span>deg</td>
+  	</tr>
+    
+                <tr>
+    <td><b>Pha C VoltagePhase Angle</b></td>
+    <td><span id="UangleC"></span>deg</td>
+  	</tr>
+  
+  </table>
+    
+    <p></p>
+    
+            
+
+<a href="index.html">
+    <button>Home</button>
+</a>
+            
+            
+       
+   
+    
+ 
+              <script src="script.js"></script>
+
+
+</body>
+</html>
+
+
+
+

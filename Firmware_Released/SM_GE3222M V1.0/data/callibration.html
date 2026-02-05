@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<style>
+h1 {
+font-family:Arial;
+  text-align: center;
+    font-size: 2rem;
+    color: white;
+    background-color:rgba(71, 209, 255, 0.553);
+    color:MidnightBlue;
+}
+
+h2 {
+
+  font-family:Courier New;
+}
+
+h3 {
+  text-align: center;
+  font-family:Courier New;
+}
+
+        th, td {
+        
+  padding-top: 5px;
+  padding-bottom: 5px;
+  padding-left: 20px;
+  padding-right: 20px;
+  
+  font-family:Courier New;
+}
+
+  <meta charset="utf-8">
+  <title>SM-Energy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, user-scalable=no" />
+  <meta name="description" content="SMEnergy">
+  <meta name="author" content="SMEnergy">
+  <meta name="theme-color" content="#000000"/>
+  <link rel="stylesheet" type="text/css" href="style.css">
+  
+  
+</style>
+</head>  
+
+    
+<body>
+
+    <div class="topnav">
+      <h1>SM<span>Energy</span></h1>
+      <h3>Meter Model SM-GE3222M</h3>
+      <h3>Configuration Settings </h3>
+      
+    </div>
+    
+      <style>
+		table, th, td {
+  		border:2px solid black;
+        font-family:Courier New;
+		}
+        
+		</style>
+
+
+        <h2>2.1 Calibration Registers</h2>
+       <table style="width:60%">
+  <tr>
+    <th>Meter Parameter</th>
+    <th>Current Settings</th>
+    <th>Callibration Setting</th>
+
+  </tr>
+  
+    <tr>
+    <td><b>Phase A Active Power Offset</b></td>
+    <td><span id="PoffsetA"></span></td>
+    <td><input type="number" id="PoffsetAtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase A Reactive Power Offset</b></td>
+    <td><span id="QoffsetA"></span></td>
+    <td><input type="number" id="QoffsetAtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase B Active Power Offset</b></td>
+    <td><span id="POffsetB"></span></td>
+    <td><input type="number" id="POffsetBtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase B Reactive Power Offset</b></td>
+    <td><span id="QOffsetB"></span></td>
+    <td><input type="number" id="QOffsetBtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase C Active Power Offset</b></td>
+    <td><span id="POffsetC"></span></td>
+    <td><input type="number" id="POffsetCtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase C Reactive Power Offset</b></td>
+    <td><span id="QOffsetC"></span></td>
+    <td><input type="number" id="QOffsetCtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b> Phase A calibration gain</b></td>
+    <td><span id="GainA"></span></td>
+    <td><input type="number" id="GainAtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b>Phase A calibration phase angle</b></td>
+    <td><span id="PhiA"></span></td>
+    <td><input type="number" id="PhiAtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b>Phase B calibration gain</b></td>
+    <td><span id="GainB"></span></td>
+    <td><input type="number" id="GainBtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b>Phase B calibration phase angle</b></td>
+    <td><span id="PhiB"></span></td>
+    <td><input type="number" id="PhiBtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b> Phase C calibration gain</b></td>
+    <td><span id="GainC"></span></td>
+    <td><input type="number" id="GainCtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b>Phase C calibration phase angle</b></td>
+    <td><span id="PhiC"></span></td>
+    <td><input type="number" id="PhiCtxt" value=""></td>
+  	</tr>
+    
+            <tr>
+    <td><b>Checksum 1</b></td>
+    <td><span id="CS1"></span></td>
+    <td><input type="number" id="CS1txt" value=""></td>
+  	</tr>
+    
+  
+    
+    </table>
+    
+           <h2>2.2 Fundamental/ Harmonic Energy Calibration Registers</h2>
+       <table style="width:60%">
+    
+      <tr>
+    <th>Meter Parameter</th>
+    <th>Current Settings</th>
+    <th>Callibration Setting</th>
+
+  </tr>
+    
+        <tr>
+    <td><b>Phase A Fundamental Active Power Offset</b></td>
+    <td><span id="POffsetAF"></span></td>
+    <td><input type="number" id="POffsetAFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase B Fundamental Active Power Offset</b></td>
+    <td><span id="POffsetBF"></span></td>
+    <td><input type="number" id="POffsetBFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase C Fundamental Active Power Offset</b></td>
+    <td><span id="POffsetCF"></span></td>
+    <td><input type="number" id="POffsetCFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase A Fundamental Active Power Gain</b></td>
+    <td><span id="PGainAF"></span></td>
+    <td><input type="number" id="PGainAFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase B Fundamental Active Power Gain</b></td>
+    <td><span id="PGainBF"></span></td>
+    <td><input type="number" id="PGainBFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Phase C Fundamental Active Power Gain</b></td>
+    <td><span id="PGainCF"></span></td>
+    <td><input type="number" id="PGainCFtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Checksum 2</b></td>
+    <td><span id="CS2"></span></td>
+    <td><input type="number" id="CS2txt" value=""></td>
+  	</tr>
+
+    </table>
+    
+    
+
+
+       <h2>2.3 Measurement Calibration Registers</h2>
+       <table style="width:60%">
+  <tr>
+    <th>Meter Parameter</th>
+    <th>Current Settings</th>
+    <th>Callibration Setting</th>
+
+  </tr>
+  
+    <tr>
+    <td><b>Phase A Voltage RMS Gain</b></td>
+    <td><span id="UgainA"></span></td>
+    <td><input type="number" id="UgainAtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase A Current RMS Gain</b></td>
+    <td><span id="IgainA"></span></td>
+    <td><input type="number" id="IgainAtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase A Voltage RMS Offset</b></td>
+    <td><span id="UoffsetA"></span></td>
+    <td><input type="number" id="UoffsetAtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase A Current RMS Offset</b></td>
+    <td><span id="IoffsetA"></span></td>
+    <td><input type="number" id="IoffsetAtxtx" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b> Phase B Voltage RMS Gain</b></td>
+    <td><span id="UgainB"></span></td>
+    <td><input type="number" id="UgainBtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase B Current RMS Gain</b></td>
+    <td><span id="IgainB"></span></td>
+    <td><input type="number" id="IgainBtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase B Voltage RMS Offset</b></td>
+    <td><span id="UoffsetB"></span></td>
+    <td><input type="number" id="UoffsetBtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase B Current RMS Offset</b></td>
+    <td><span id="IoffsetB"></span></td>
+    <td><input type="number" id="IoffsetBtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase C Voltage RMS Gain</b></td>
+    <td><span id="UgainC"></span></td>
+    <td><input type="number" id="UgainCtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase C Current RMS Gain</b></td>
+    <td><span id="IgainC"></span></td>
+    <td><input type="number" id="IgainCtxt" value=""></td>
+  	</tr>
+    
+    <tr>
+    <td><b>Phase C Voltage RMS Offset</b></td>
+    <td><span id="UoffsetC"></span></td>
+    <td><input type="number" id="UoffsetCtxt" value=""></td>
+  	</tr>
+       
+    <tr>
+    <td><b>Phase C Current RMS Offset</b></td>
+    <td><span id="IoffsetC"></span></td>
+    <td><input type="text" id="IoffsetCtxt" value=""></td>
+  	</tr>
+    
+    
+    <tr>
+    <td><b>Sampled N line Current RMS Gain</b></td>
+    <td><span id="IgainN"></span></td>
+    <td><input type="number" id="IgainNtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b>Sampled N line Current RMS Offset</b></td>
+    <td><span id="IoffsetN"></span></td>
+    <td><input type="number" id="IoffsetNtxt" value=""></td>
+  	</tr>
+    
+        <tr>
+    <td><b> Checksum 3</b></td>
+    <td><span id="CS3"></span></td>
+    <td><input type="number" id="CS3txt" value=""></td>
+  	</tr>
+    
+
+    </table>
+            
+   
+    
+    
+            
+<p></p>
+
+<a href="index.html">
+    <button>Home</button>
+</a>
+
+
+
+<button type='button' id="setCallibration">Save Config</button>
+
+            
+            
+<script src="script.js"></script>
+
+
+</body>
+</html>
+
+
