@@ -201,5 +201,3 @@ private:
 #define LOG_WARN(module, ...)  Logger::getInstance().logf(LogLevel::WARN, module, __VA_ARGS__)
 #define LOG_ERROR(module, ...) Logger::getInstance().logf(LogLevel::ERROR, module, __VA_ARGS__)
 #define LOG_FATAL(module, ...) Logger::getInstance().logf(LogLevel::FATAL, module, __VA_ARGS__)
-
-#endif // LOGGER_H

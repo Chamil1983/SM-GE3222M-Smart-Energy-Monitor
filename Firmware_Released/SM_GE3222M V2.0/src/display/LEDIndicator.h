@@ -176,5 +176,3 @@ private:
     static const uint16_t FAULT_BLINK_NETWORK = 700;
     static const uint16_t FAULT_BLINK_CRITICAL = 150;
 };
-
-#endif // LEDINDICATOR_H

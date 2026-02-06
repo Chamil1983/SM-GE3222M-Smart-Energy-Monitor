@@ -223,5 +223,3 @@ private:
     static const uint8_t CHAR_WIFI = 2;
     static const uint8_t CHAR_CHECK = 3;
 };
-
-#endif // LCDMANAGER_H

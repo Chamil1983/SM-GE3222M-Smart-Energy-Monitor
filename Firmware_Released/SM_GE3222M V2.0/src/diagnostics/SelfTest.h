@@ -184,5 +184,3 @@ private:
     uint8_t i2cDevicesFound;
     uint8_t i2cAddresses[8];
 };
-
-#endif // SELFTEST_H

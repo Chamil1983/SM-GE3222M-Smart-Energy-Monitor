@@ -208,5 +208,3 @@ private:
     static const uint32_t TASK_OVERRUN_WARNING = 10;
     static const int RSSI_WARNING_THRESHOLD = -80;             // -80 dBm
 };
-
-#endif // HEALTHMONITOR_H
