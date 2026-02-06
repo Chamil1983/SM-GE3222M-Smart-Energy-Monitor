@@ -45,6 +45,127 @@
 #include <LiquidCrystal_I2C.h>
 #include "emonesp.h"
 
+// -----------------------------------------------------------------------------
+// ESP32 Arduino core v3.x (IDF 5.x) compatibility shims
+// - Fix legacy WiFi event IDs (EVT_*) for ESP32 Arduino core v3.x (IDF 5.x)
+// - Fix legacy STA WPS event name variants
+// -----------------------------------------------------------------------------
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
+  #include <esp_event.h>
+  #include <esp_wifi.h>
+  #include <esp_mac.h>
+
+  // ---- WPS event renames (core 3.x uses ARDUINO_EVENT_WPS_*) ----
+  #ifndef ARDUINO_EVENT_WIFI_STA_WPS_ER_SUCCESS
+    #define ARDUINO_EVENT_WIFI_STA_WPS_ER_SUCCESS ARDUINO_EVENT_WPS_ER_SUCCESS
+  #endif
+  #ifndef ARDUINO_EVENT_WIFI_STA_WPS_ER_FAILED
+    #define ARDUINO_EVENT_WIFI_STA_WPS_ER_FAILED  ARDUINO_EVENT_WPS_ER_FAILED
+  #endif
+  #ifndef ARDUINO_EVENT_WIFI_STA_WPS_ER_TIMEOUT
+    #define ARDUINO_EVENT_WIFI_STA_WPS_ER_TIMEOUT ARDUINO_EVENT_WPS_ER_TIMEOUT
+  #endif
+  #ifndef ARDUINO_EVENT_WIFI_STA_WPS_ER_PIN
+    #define ARDUINO_EVENT_WIFI_STA_WPS_ER_PIN     ARDUINO_EVENT_WPS_ER_PIN
+  #endif
+
+  // ---- Legacy EVT_* IDs (used by this project) -> core 3.x ARDUINO_EVENT_* ----
+  // Some libraries ship legacy EVT_* defines that can COLLIDE (duplicate case values).
+  // We explicitly undef + remap them to the core 3.x event IDs to keep switch(event) valid.
+  #ifdef EVT_WIFI_READY
+    #undef EVT_WIFI_READY
+  #endif
+  #ifdef EVT_SCAN_DONE
+    #undef EVT_SCAN_DONE
+  #endif
+  #ifdef EVT_STA_START
+    #undef EVT_STA_START
+  #endif
+  #ifdef EVT_STA_STOP
+    #undef EVT_STA_STOP
+  #endif
+  #ifdef EVT_STA_CONNECTED
+    #undef EVT_STA_CONNECTED
+  #endif
+  #ifdef EVT_STA_DISCONNECTED
+    #undef EVT_STA_DISCONNECTED
+  #endif
+  #ifdef EVT_STA_AUTHMODE_CHANGE
+    #undef EVT_STA_AUTHMODE_CHANGE
+  #endif
+  #ifdef EVT_STA_GOT_IP
+    #undef EVT_STA_GOT_IP
+  #endif
+  #ifdef EVT_STA_LOST_IP
+    #undef EVT_STA_LOST_IP
+  #endif
+  #ifdef EVT_STA_WPS_ER_SUCCESS
+    #undef EVT_STA_WPS_ER_SUCCESS
+  #endif
+  #ifdef EVT_STA_WPS_ER_FAILED
+    #undef EVT_STA_WPS_ER_FAILED
+  #endif
+  #ifdef EVT_STA_WPS_ER_TIMEOUT
+    #undef EVT_STA_WPS_ER_TIMEOUT
+  #endif
+  #ifdef EVT_STA_WPS_ER_PIN
+    #undef EVT_STA_WPS_ER_PIN
+  #endif
+  #ifdef EVT_AP_START
+    #undef EVT_AP_START
+  #endif
+  #ifdef EVT_AP_STOP
+    #undef EVT_AP_STOP
+  #endif
+  #ifdef EVT_AP_STACONNECTED
+    #undef EVT_AP_STACONNECTED
+  #endif
+  #ifdef EVT_AP_STADISCONNECTED
+    #undef EVT_AP_STADISCONNECTED
+  #endif
+  #ifdef EVT_AP_STAIPASSIGNED
+    #undef EVT_AP_STAIPASSIGNED
+  #endif
+  #ifdef EVT_AP_PROBEREQRECVED
+    #undef EVT_AP_PROBEREQRECVED
+  #endif
+
+  #define EVT_WIFI_READY           ARDUINO_EVENT_WIFI_READY
+
+  // Scan event name varies across core versions; prefer the Arduino event id if present.
+  #if defined(ARDUINO_EVENT_WIFI_SCAN_DONE)
+    #define EVT_SCAN_DONE          ARDUINO_EVENT_WIFI_SCAN_DONE
+  #elif defined(ARDUINO_EVENT_SCAN_DONE)
+    #define EVT_SCAN_DONE          ARDUINO_EVENT_SCAN_DONE
+  #elif defined(SC_EVENT_SCAN_DONE)
+    #define EVT_SCAN_DONE          SC_EVENT_SCAN_DONE
+  #elif defined(WIFI_EVENT_SCAN_DONE)
+    #define EVT_SCAN_DONE          WIFI_EVENT_SCAN_DONE
+  #else
+    #define EVT_SCAN_DONE          ((arduino_event_id_t)0x7FFFFFFE)  // no scan event in this core; keep unique
+  #endif
+
+  #define EVT_STA_START            ARDUINO_EVENT_WIFI_STA_START
+  #define EVT_STA_STOP             ARDUINO_EVENT_WIFI_STA_STOP
+  #define EVT_STA_CONNECTED        ARDUINO_EVENT_WIFI_STA_CONNECTED
+  #define EVT_STA_DISCONNECTED     ARDUINO_EVENT_WIFI_STA_DISCONNECTED
+  #define EVT_STA_AUTHMODE_CHANGE  ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE
+  #define EVT_STA_GOT_IP           ARDUINO_EVENT_WIFI_STA_GOT_IP
+  #define EVT_STA_LOST_IP          ARDUINO_EVENT_WIFI_STA_LOST_IP
+
+  #define EVT_STA_WPS_ER_SUCCESS   ARDUINO_EVENT_WIFI_STA_WPS_ER_SUCCESS
+  #define EVT_STA_WPS_ER_FAILED    ARDUINO_EVENT_WIFI_STA_WPS_ER_FAILED
+  #define EVT_STA_WPS_ER_TIMEOUT   ARDUINO_EVENT_WIFI_STA_WPS_ER_TIMEOUT
+  #define EVT_STA_WPS_ER_PIN       ARDUINO_EVENT_WIFI_STA_WPS_ER_PIN
+
+  #define EVT_AP_START             ARDUINO_EVENT_WIFI_AP_START
+  #define EVT_AP_STOP              ARDUINO_EVENT_WIFI_AP_STOP
+  #define EVT_AP_STACONNECTED      ARDUINO_EVENT_WIFI_AP_STACONNECTED
+  #define EVT_AP_STADISCONNECTED   ARDUINO_EVENT_WIFI_AP_STADISCONNECTED
+  #define EVT_AP_STAIPASSIGNED     ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED
+  #define EVT_AP_PROBEREQRECVED    ARDUINO_EVENT_WIFI_AP_PROBEREQRECVED
+#endif
+
 // ****************  VARIABLES / DEFINES / STATIC / STRUCTURES ****************
 
 
@@ -255,20 +376,22 @@ void InitialiseStaticIP()
 
 String getMacAddress()
 {
-    uint8_t baseMac[6];
+#ifdef ESP32
+    uint8_t baseMac[6] = { 0 };
 
-    // Get MAC address for WiFi station
+    // ESP32 Arduino core v3.x uses ESP_MAC_* identifiers (esp_mac.h)
+    // Read MAC for WiFi station interface.
     esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
 
     char baseMacChr[18] = { 0 };
-    sprintf(baseMacChr, "%02X:%02X:%02X:%02X:%02X:%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
-
-    String macAddress = String(baseMacChr);
-
-
+    sprintf(baseMacChr, "%02X:%02X:%02X:%02X:%02X:%02X",
+        baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
 
     return String(baseMacChr);
-
+#else
+    // Fallback for non-ESP32 platforms
+    return WiFi.macAddress();
+#endif
 }
 
 
@@ -423,46 +546,46 @@ void WiFiEvent(WiFiEvent_t event)
 #endif
 
     switch (event) {
-    case SYSTEM_EVENT_WIFI_READY:
+    case EVT_WIFI_READY:
         DBUGS.println("WiFi interface ready");
 
         break;
-    case SYSTEM_EVENT_SCAN_DONE:
+    case EVT_SCAN_DONE:
         DBUGS.println("Completed scan for access points");
         break;
-    case SYSTEM_EVENT_STA_START:
+    case EVT_STA_START:
         DBUGS.println("WiFi client started");
         break;
-    case SYSTEM_EVENT_STA_STOP:
+    case EVT_STA_STOP:
         DBUGS.println("WiFi clients stopped");
         break;
-    case SYSTEM_EVENT_STA_CONNECTED:
+    case EVT_STA_CONNECTED:
         DBUGS.print("Connected to SSID: ");
         DBUGS.println(ssid);
         WiFiLCD.setCursor(1, 0);
         WiFiLCD.print("WiFi Connected");
         client_disconnects = 0;
-        
+
         break;
-    case SYSTEM_EVENT_STA_DISCONNECTED:
+    case EVT_STA_DISCONNECTED:
         DBUGS.println("Disconnected from WiFi access point");
 
-        
+
         break;
-    case SYSTEM_EVENT_STA_AUTHMODE_CHANGE:
+    case EVT_STA_AUTHMODE_CHANGE:
         DBUGS.println("Authentication mode of access point has changed");
         break;
-    case SYSTEM_EVENT_STA_GOT_IP: {
+    case EVT_STA_GOT_IP: {
         IPAddress myAddress = WiFi.localIP();
         char tmpStr[40];
         sprintf(tmpStr, "%d.%d.%d.%d", myAddress[0], myAddress[1], myAddress[2], myAddress[3]);
         ipaddress = tmpStr;
         DBUGS.print("SM-GE3222M(WiFi) IP: ");
         DBUGS.println(tmpStr);
-        
-        WiFiLCD.setCursor(2,0);
+
+        WiFiLCD.setCursor(2, 0);
         WiFiLCD.print("SSID => " + String(WiFi.SSID()));
-        WiFiLCD.setCursor(3,0);
+        WiFiLCD.setCursor(3, 0);
         WiFiLCD.print("IP => " + String(tmpStr));
 
         // Copy the connected network and ipaddress to global strings for use in status request
@@ -472,40 +595,40 @@ void WiFiEvent(WiFiEvent_t event)
         client_disconnects = 0;
         client_retry = false;
     }
-                                break;
-    case SYSTEM_EVENT_STA_LOST_IP:
+                       break;
+    case EVT_STA_LOST_IP:
         DBUGS.println("Lost IP address and IP address is reset to 0");
         break;
-    case SYSTEM_EVENT_STA_WPS_ER_SUCCESS:
+    case EVT_STA_WPS_ER_SUCCESS:
         DBUGS.println("WiFi Protected Setup (WPS): succeeded in enrollee mode");
         break;
-    case SYSTEM_EVENT_STA_WPS_ER_FAILED:
+    case EVT_STA_WPS_ER_FAILED:
         DBUGS.println("WiFi Protected Setup (WPS): failed in enrollee mode");
         break;
-    case SYSTEM_EVENT_STA_WPS_ER_TIMEOUT:
+    case EVT_STA_WPS_ER_TIMEOUT:
         DBUGS.println("WiFi Protected Setup (WPS): timeout in enrollee mode");
         break;
-    case SYSTEM_EVENT_STA_WPS_ER_PIN:
+    case EVT_STA_WPS_ER_PIN:
         DBUGS.println("WiFi Protected Setup (WPS): pin code in enrollee mode");
         break;
-    case SYSTEM_EVENT_AP_START:
+    case EVT_AP_START:
         DBUGS.println("WiFi access point started");
         break;
-    case SYSTEM_EVENT_AP_STOP:
+    case EVT_AP_STOP:
         DBUGS.println("WiFi access point stopped");
         break;
-    case SYSTEM_EVENT_AP_STACONNECTED:
+    case EVT_AP_STACONNECTED:
         DBUGS.println("Client connected");
         apClients++;
         break;
-    case SYSTEM_EVENT_AP_STADISCONNECTED:
+    case EVT_AP_STADISCONNECTED:
         DBUGS.println("Client disconnected");
         apClients--;
         break;
-    case SYSTEM_EVENT_AP_STAIPASSIGNED:
+    case EVT_AP_STAIPASSIGNED:
         DBUGS.println("Assigned IP address to client");
         break;
-    case SYSTEM_EVENT_AP_PROBEREQRECVED:
+    case EVT_AP_PROBEREQRECVED:
         DBUGS.println("Received probe request");
         break;
     default:

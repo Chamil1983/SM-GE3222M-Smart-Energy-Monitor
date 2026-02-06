@@ -1,6 +1,5 @@
 #include <SPI.h>
-#include "Ethernet.h"
-#include <cstdint>
+#include <Ethernet.h>
 
 //Import Settings and Parameters
 extern boolean Config_State, WiFiAP_Mode, WIFi_Mode, WIFiClient_Mode, ETH_Mode , MDBUS_Mode ;

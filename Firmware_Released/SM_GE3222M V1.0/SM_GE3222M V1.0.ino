@@ -13,22 +13,8 @@
 // Define Function Prototypes that use User Types below here or use a .h file
 //
 
-/*
-#include <Button.h>
-#include <ssl_client.h>
-#include <WiFiClientSecure.h>
-#include <Arduino_JSON.h>
-#include <ArduinoJson.h>
-#include <ESPAsyncWebServer.h>
-#include <DHT.h>
-#include <EEPROM.h>
-#include <Wire.h>
-#include <SparkFun_External_EEPROM.h>
-#include <MCP23017.h>
-#include <SPIFFS.h>
-*/
 
-//===========================================================
+
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiMulti.h>
@@ -360,15 +346,12 @@ void IRAM_ATTR Timer0_ISR()
 //Setup Timer0 configurations
 void Setup_Timer0()
 {
-
-    // Configure Prescaler to 80, as our timer runs @ 80Mhz
-    // Giving an output of 80,000,000 / 80 = 1,000,000 ticks / second
-    timer = timerBegin(0, 80, true);
-    timerAttachInterrupt(timer, &Timer0_ISR, true);
-    // Fire Interrupt every 1ms ticks, so 1ms
-    timerAlarmWrite(timer, TimerTicks, true);
-    timerAlarmEnable(timer);
-
+    // ESP32 Arduino core v3.x timer API changed (no prescaler/countUp parameters).
+    // We run the hardware timer at 1 MHz so 1 tick = 1 µs, then set the alarm for 1000 ticks = 1 ms.
+    timer = timerBegin(1000000);                 // 1,000,000 Hz
+    timerAttachInterrupt(timer, &Timer0_ISR);    // ISR callback
+    timerAlarm(timer, TimerTicks, true, 0);      // alarm value (ticks), auto-reload, reload count (0 = unlimited)
+    timerStart(timer);
 }
 
 
