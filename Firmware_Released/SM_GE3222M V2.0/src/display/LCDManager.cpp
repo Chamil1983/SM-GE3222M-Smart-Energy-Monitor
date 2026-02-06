@@ -306,7 +306,7 @@ void LCDManager::renderSystem() {
     uint32_t days = systemUptime / 86400;
     uint32_t hours = (systemUptime % 86400) / 3600;
     uint32_t mins = (systemUptime % 3600) / 60;
-    snprintf(buffer, sizeof(buffer), "Up:%3ud %02uh %02um", days, hours, mins);
+    snprintf(buffer, sizeof(buffer), "Up:%3u %02uh %02um", days, hours, mins);
     lcd.print(buffer);
     
     // Line 2: Temperature and Heap

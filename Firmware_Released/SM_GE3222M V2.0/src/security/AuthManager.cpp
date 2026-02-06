@@ -29,7 +29,7 @@ AuthManager& AuthManager::getInstance() {
 
 void AuthManager::init() {
     NVStorage& nvs = NVStorage::getInstance();
-    nvs.begin(NVS_NAMESPACE);
+    nvs.init();
     
     if (!loadCredentials()) {
         String defaultPassword = hashPassword("admin");
@@ -47,22 +47,19 @@ void AuthManager::init() {
 bool AuthManager::loadCredentials() {
     NVStorage& nvs = NVStorage::getInstance();
     
-    if (nvs.hasKey(NVS_USERNAME_KEY)) {
-        username_ = nvs.getString(NVS_USERNAME_KEY, "admin");
-        passwordHash_ = nvs.getString(NVS_PASSWORD_KEY, "");
-        firstLogin_ = nvs.getBool(NVS_FIRST_LOGIN_KEY, true);
-        return !passwordHash_.isEmpty();
-    }
+    username_ = nvs.getString(NVS_NAMESPACE, NVS_USERNAME_KEY, "");
+    passwordHash_ = nvs.getString(NVS_NAMESPACE, NVS_PASSWORD_KEY, "");
+    firstLogin_ = nvs.getUInt(NVS_NAMESPACE, NVS_FIRST_LOGIN_KEY, 1) != 0;
     
-    return false;
+    return !passwordHash_.isEmpty();
 }
 
 bool AuthManager::saveCredentials() {
     NVStorage& nvs = NVStorage::getInstance();
     
-    nvs.putString(NVS_USERNAME_KEY, username_);
-    nvs.putString(NVS_PASSWORD_KEY, passwordHash_);
-    nvs.putBool(NVS_FIRST_LOGIN_KEY, firstLogin_);
+    nvs.putString(NVS_NAMESPACE, NVS_USERNAME_KEY, username_.c_str());
+    nvs.putString(NVS_NAMESPACE, NVS_PASSWORD_KEY, passwordHash_.c_str());
+    nvs.putUInt(NVS_NAMESPACE, NVS_FIRST_LOGIN_KEY, firstLogin_ ? 1 : 0);
     
     return true;
 }
@@ -70,33 +67,32 @@ bool AuthManager::saveCredentials() {
 bool AuthManager::loadAPIKeys() {
     NVStorage& nvs = NVStorage::getInstance();
     
-    if (nvs.hasKey(NVS_API_KEYS_KEY)) {
-        String keysJson = nvs.getString(NVS_API_KEYS_KEY, "");
-        // Parse JSON and populate apiKeys_ map
-        // Simple implementation: store as key1:name1:timestamp1:active1|key2:name2:timestamp2:active2
-        if (keysJson.length() > 0) {
-            int start = 0;
-            while (start < keysJson.length()) {
-                int end = keysJson.indexOf('|', start);
-                if (end == -1) end = keysJson.length();
+    String keysJson = nvs.getString(NVS_NAMESPACE, NVS_API_KEYS_KEY, "");
+    
+    // Parse and populate apiKeys_ map
+    // Simple implementation: store as key1:name1:timestamp1:active1|key2:name2:timestamp2:active2
+    if (keysJson.length() > 0) {
+        int start = 0;
+        while (start < keysJson.length()) {
+            int end = keysJson.indexOf('|', start);
+            if (end == -1) end = keysJson.length();
+            
+            String entry = keysJson.substring(start, end);
+            int colon1 = entry.indexOf(':');
+            int colon2 = entry.indexOf(':', colon1 + 1);
+            int colon3 = entry.indexOf(':', colon2 + 1);
+            
+            if (colon1 > 0 && colon2 > colon1 && colon3 > colon2) {
+                APIKey apiKey;
+                apiKey.key = entry.substring(0, colon1);
+                apiKey.name = entry.substring(colon1 + 1, colon2);
+                apiKey.createdAt = entry.substring(colon2 + 1, colon3).toInt();
+                apiKey.isActive = entry.substring(colon3 + 1).toInt() == 1;
                 
-                String entry = keysJson.substring(start, end);
-                int colon1 = entry.indexOf(':');
-                int colon2 = entry.indexOf(':', colon1 + 1);
-                int colon3 = entry.indexOf(':', colon2 + 1);
-                
-                if (colon1 > 0 && colon2 > colon1 && colon3 > colon2) {
-                    APIKey apiKey;
-                    apiKey.key = entry.substring(0, colon1);
-                    apiKey.name = entry.substring(colon1 + 1, colon2);
-                    apiKey.createdAt = entry.substring(colon2 + 1, colon3).toInt();
-                    apiKey.isActive = entry.substring(colon3 + 1).toInt() == 1;
-                    
-                    apiKeys_[apiKey.key] = apiKey;
-                }
-                
-                start = end + 1;
+                apiKeys_[apiKey.key] = apiKey;
             }
+            
+            start = end + 1;
         }
         return true;
     }
@@ -114,7 +110,7 @@ bool AuthManager::saveAPIKeys() {
         keysJson += key.key + ":" + key.name + ":" + String(key.createdAt) + ":" + (key.isActive ? "1" : "0");
     }
     
-    nvs.putString(NVS_API_KEYS_KEY, keysJson);
+    nvs.putString(NVS_NAMESPACE, NVS_API_KEYS_KEY, keysJson.c_str());
     return true;
 }
 
