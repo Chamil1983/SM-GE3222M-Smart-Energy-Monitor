@@ -235,3 +235,16 @@ void ErrorHandler::logMessage(LogLevel level, const String& message) {
 void ErrorHandler::setError(ErrorCode code) {
     reportError(code, "System", "");
 }
+
+void ErrorHandler::setError(ErrorCode code, const char* message) {
+    reportError(code, "System", message);
+}
+
+void ErrorHandler::clearError(ErrorCode code) {
+    uint8_t index = static_cast<uint8_t>(code);
+    if (index < 22) {
+        errorCounts[index] = 0;
+    }
+    Serial.print("[ErrorHandler] Cleared error: ");
+    Serial.println(getErrorCodeName(code));
+}
