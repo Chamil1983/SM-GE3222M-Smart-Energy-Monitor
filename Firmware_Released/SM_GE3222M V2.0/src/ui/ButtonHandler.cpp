@@ -200,7 +200,7 @@ void ButtonHandler::invokeCallback(Button button, Event event) {
             // Restore defaults
             ConfigManager::getInstance().restoreDefaults();
             ConfigManager::getInstance().save();
-            NVStorage::getInstance().clear();
+            NVStorage::getInstance().clearAll();
             
             display.displayMessage(2, "Done!");
             display.displayMessage(3, "Rebooting...");

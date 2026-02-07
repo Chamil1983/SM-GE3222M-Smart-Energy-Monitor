@@ -19,6 +19,7 @@
 #include <nvs.h>
 #include <nvs_flash.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 
 SelfTest::SelfTest() : i2cDevicesFound(0) {
     memset(i2cAddresses, 0, sizeof(i2cAddresses));

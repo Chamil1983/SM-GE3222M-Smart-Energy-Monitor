@@ -240,8 +240,8 @@ void AccessControl::recordLogin(const String& username) {
 bool AccessControl::loadUsers() {
     NVStorage& nvs = NVStorage::getInstance();
     
-    String jsonData;
-    if (!nvs.getString(NVS_NAMESPACE, NVS_USERS_KEY, jsonData)) {
+    String jsonData = nvs.getString(NVS_NAMESPACE, NVS_USERS_KEY, "");
+    if (jsonData.length() == 0) {
         Logger::getInstance().warn("AccessControl", "No user data in NVS");
         return false;
     }
@@ -293,7 +293,7 @@ bool AccessControl::saveUsers() {
     serializeJson(doc, jsonData);
 
     NVStorage& nvs = NVStorage::getInstance();
-    if (!nvs.setString(NVS_NAMESPACE, NVS_USERS_KEY, jsonData)) {
+    if (!nvs.putString(NVS_NAMESPACE, NVS_USERS_KEY, jsonData.c_str())) {
         Logger::getInstance().error("AccessControl", "Failed to save users to NVS");
         return false;
     }
