@@ -1,7 +1,7 @@
 /**
  * @file PinMap.h
  * @brief Hardware pin definitions and I/O mapping
- * 
+ *
  * SM-GE3222M Smart Energy Monitor V2.0
  * All GPIO, I2C, SPI, and UART pin assignments
  */
@@ -10,11 +10,11 @@
 
 #include <Arduino.h>
 
-// ============================================================
-// ESP32 GPIO Pin Assignments
-// ============================================================
+ // ============================================================
+ // ESP32 GPIO Pin Assignments
+ // ============================================================
 
-// SPI Bus (Shared between ATM90E36 and W5500)
+ // SPI Bus (Shared between ATM90E36 and W5500)
 #define PIN_SPI_MISO        19
 #define PIN_SPI_MOSI        23
 #define PIN_SPI_SCK         18
@@ -98,7 +98,7 @@
 
 #define SPI_FREQ_ATM        1000000    // 1 MHz for ATM90E36
 #define SPI_FREQ_W5500      8000000    // 8 MHz for W5500 Ethernet
-#define SPI_MODE            SPI_MODE3  // Clock polarity and phase
+#define ATM_SPI_MODE        SPI_MODE3  // Clock polarity and phase
 
 // ============================================================
 // UART Configuration
@@ -111,5 +111,3 @@
 // ============================================================
 
 #define DHT_TYPE            DHT22      // DHT 22 (AM2302)
-
-#endif // PINMAP_H

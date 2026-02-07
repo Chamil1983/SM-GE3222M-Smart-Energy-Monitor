@@ -8,39 +8,39 @@ WiFiManager& WiFiManager::getInstance() {
     return instance;
 }
 
-WiFiManager::WiFiManager() 
+WiFiManager::WiFiManager()
     : initialized_(false),
-      apModeActive_(false),
-      staConnected_(false),
-      reconnectAttempts_(0),
-      lastReconnectAttempt_(0),
-      reconnectDelay_(BASE_RECONNECT_DELAY),
-      mdnsStarted_(false),
-      eventHandlerId_(0) {
+    apModeActive_(false),
+    staConnected_(false),
+    reconnectAttempts_(0),
+    lastReconnectAttempt_(0),
+    reconnectDelay_(BASE_RECONNECT_DELAY),
+    mdnsStarted_(false),
+    eventHandlerId_(0) {
 }
 
-bool WiFiManager::init(const WiFiConfig& config) {
+bool WiFiManager::init(const WiFiManagerConfig& config) {
     if (initialized_) {
         return true;
     }
-    
+
     config_ = config;
-    
+
     // Set WiFi mode to STA
     WiFi.mode(WIFI_STA);
-    
+
     // Set hostname if provided
     if (!config_.hostname.isEmpty()) {
         WiFi.setHostname(config_.hostname.c_str());
     }
-    
+
     // Register WiFi event handler
     WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
         getInstance().handleWiFiEvent(event);
-    });
-    
+        });
+
     initialized_ = true;
-    
+
     ErrorHandler::getInstance().logInfo("WiFiManager initialized");
     return true;
 }
@@ -50,28 +50,28 @@ bool WiFiManager::connect() {
         ErrorHandler::getInstance().logError(ErrorCode::WIFI_INIT_FAILED, "WiFi not initialized or no SSID configured");
         return false;
     }
-    
+
     disconnect(); // Clean disconnect first
-    
+
     // Configure static IP if requested
     if (config_.useStaticIP) {
-        if (!WiFi.config(config_.staticIP, config_.gateway, config_.subnet, 
-                        config_.dns1, config_.dns2)) {
+        if (!WiFi.config(config_.staticIP, config_.gateway, config_.subnet,
+            config_.dns1, config_.dns2)) {
             ErrorHandler::getInstance().logWarning("Failed to configure static IP");
         }
     }
-    
+
     // Begin connection
     WiFi.begin(config_.ssid.c_str(), config_.password.c_str());
-    
+
     ErrorHandler::getInstance().logInfo("Connecting to WiFi: " + config_.ssid);
-    
+
     // Wait for connection (non-blocking timeout)
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
         delay(100);
     }
-    
+
     if (WiFi.status() == WL_CONNECTED) {
         staConnected_ = true;
         reconnectAttempts_ = 0;
@@ -79,7 +79,7 @@ bool WiFiManager::connect() {
         ErrorHandler::getInstance().logInfo("WiFi connected: " + WiFi.localIP().toString());
         return true;
     }
-    
+
     ErrorHandler::getInstance().logWarning("WiFi connection timeout");
     return false;
 }
@@ -93,28 +93,28 @@ void WiFiManager::disconnect() {
 
 bool WiFiManager::startAP() {
     String apSSID = generateAPSSID();
-    
+
     // Configure AP mode
     WiFi.mode(WIFI_AP_STA);
-    
+
     IPAddress apIP(192, 168, 4, 1);
     IPAddress subnet(255, 255, 255, 0);
-    
+
     if (!WiFi.softAPConfig(apIP, apIP, subnet)) {
         ErrorHandler::getInstance().logError(ErrorCode::WIFI_AP_START_FAILED, "Failed to configure AP");
         return false;
     }
-    
+
     // Start AP with random channel
     int channel = (random(3) * 5) + 1;
     if (!WiFi.softAP(apSSID.c_str(), "", channel)) {
         ErrorHandler::getInstance().logError(ErrorCode::WIFI_AP_START_FAILED, "Failed to start AP");
         return false;
     }
-    
+
     setupCaptivePortal();
     apModeActive_ = true;
-    
+
     ErrorHandler::getInstance().logInfo("AP started: " + apSSID + " IP: " + WiFi.softAPIP().toString());
     return true;
 }
@@ -155,11 +155,11 @@ IPAddress WiFiManager::getIP() const {
 String WiFiManager::getMACAddress() const {
     uint8_t baseMac[6];
     esp_read_mac(baseMac, ESP_MAC_WIFI_STA);
-    
+
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-             baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
-    
+        baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+
     return String(macStr);
 }
 
@@ -171,14 +171,14 @@ bool WiFiManager::setupMDNS(const char* hostname) {
     if (mdnsStarted_) {
         MDNS.end();
     }
-    
+
     if (MDNS.begin(hostname)) {
         MDNS.addService("http", "tcp", 80);
         mdnsStarted_ = true;
         ErrorHandler::getInstance().logInfo("mDNS started: " + String(hostname) + ".local");
         return true;
     }
-    
+
     ErrorHandler::getInstance().logWarning("Failed to start mDNS");
     return false;
 }
@@ -193,7 +193,7 @@ void WiFiManager::update() {
     if (apModeActive_) {
         dnsServer_.processNextRequest();
     }
-    
+
     // Auto-reconnect logic
     if (initialized_ && !isConnected() && !config_.ssid.isEmpty()) {
         attemptReconnect();
@@ -202,7 +202,7 @@ void WiFiManager::update() {
 
 String WiFiManager::getRSSIDescription() const {
     int rssi = getRSSI();
-    
+
     if (rssi >= -30) return "Excellent";
     if (rssi >= -50) return "Very Good";
     if (rssi >= -60) return "Good";
@@ -216,57 +216,57 @@ String WiFiManager::getRSSIDescription() const {
 
 void WiFiManager::handleWiFiEvent(WiFiEvent_t event) {
     switch (event) {
-        case ARDUINO_EVENT_WIFI_STA_START:
-            ErrorHandler::getInstance().logInfo("WiFi STA started");
-            break;
-            
-        case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-            ErrorHandler::getInstance().logInfo("WiFi connected to: " + config_.ssid);
-            staConnected_ = true;
-            reconnectAttempts_ = 0;
-            reconnectDelay_ = BASE_RECONNECT_DELAY;
-            break;
-            
-        case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-            ErrorHandler::getInstance().logInfo("Got IP: " + WiFi.localIP().toString());
-            break;
-            
-        case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-            ErrorHandler::getInstance().logWarning("WiFi disconnected");
-            staConnected_ = false;
-            break;
-            
-        case ARDUINO_EVENT_WIFI_AP_START:
-            ErrorHandler::getInstance().logInfo("WiFi AP started");
-            break;
-            
-        case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
-            ErrorHandler::getInstance().logInfo("Client connected to AP");
-            break;
-            
-        case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
-            ErrorHandler::getInstance().logInfo("Client disconnected from AP");
-            break;
-            
-        default:
-            break;
+    case ARDUINO_EVENT_WIFI_STA_START:
+        ErrorHandler::getInstance().logInfo("WiFi STA started");
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+        ErrorHandler::getInstance().logInfo("WiFi connected to: " + config_.ssid);
+        staConnected_ = true;
+        reconnectAttempts_ = 0;
+        reconnectDelay_ = BASE_RECONNECT_DELAY;
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+        ErrorHandler::getInstance().logInfo("Got IP: " + WiFi.localIP().toString());
+        break;
+
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+        ErrorHandler::getInstance().logWarning("WiFi disconnected");
+        staConnected_ = false;
+        break;
+
+    case ARDUINO_EVENT_WIFI_AP_START:
+        ErrorHandler::getInstance().logInfo("WiFi AP started");
+        break;
+
+    case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
+        ErrorHandler::getInstance().logInfo("Client connected to AP");
+        break;
+
+    case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
+        ErrorHandler::getInstance().logInfo("Client disconnected from AP");
+        break;
+
+    default:
+        break;
     }
 }
 
 void WiFiManager::attemptReconnect() {
     unsigned long now = millis();
-    
+
     if (now - lastReconnectAttempt_ >= reconnectDelay_) {
         lastReconnectAttempt_ = now;
         reconnectAttempts_++;
-        
+
         ErrorHandler::getInstance().logInfo("Reconnect attempt #" + String(reconnectAttempts_));
-        
+
         WiFi.reconnect();
-        
+
         // Exponential backoff
         reconnectDelay_ = min(reconnectDelay_ * 2, MAX_RECONNECT_DELAY);
-        
+
         // Start AP after 3 failed attempts
         if (reconnectAttempts_ == 3 && !apModeActive_) {
             ErrorHandler::getInstance().logWarning("Multiple reconnect failures, starting AP mode");

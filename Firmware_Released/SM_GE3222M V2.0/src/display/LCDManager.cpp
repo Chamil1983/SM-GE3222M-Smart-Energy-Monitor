@@ -1,7 +1,7 @@
 /**
  * @file LCDManager.cpp
  * @brief 20x4 LCD display management implementation
- * 
+ *
  * SM-GE3222M Smart Energy Monitor V2.0
  */
 
@@ -9,27 +9,27 @@
 #include "../../include/Version.h"
 #include "../core/ErrorHandler.h"
 
-// Custom character definitions
-static const uint8_t degreeChar[8] = {0x06, 0x09, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00};
-static const uint8_t arrowChar[8] = {0x00, 0x04, 0x02, 0x1F, 0x02, 0x04, 0x00, 0x00};
-static const uint8_t wifiChar[8] = {0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00};
-static const uint8_t checkChar[8] = {0x00, 0x01, 0x03, 0x16, 0x1C, 0x08, 0x00, 0x00};
+ // Custom character definitions
+static const uint8_t degreeChar[8] = { 0x06, 0x09, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t arrowChar[8] = { 0x00, 0x04, 0x02, 0x1F, 0x02, 0x04, 0x00, 0x00 };
+static const uint8_t wifiChar[8] = { 0x00, 0x0E, 0x11, 0x04, 0x0A, 0x00, 0x04, 0x00 };
+static const uint8_t checkChar[8] = { 0x00, 0x01, 0x03, 0x16, 0x1C, 0x08, 0x00, 0x00 };
 
-LCDManager::LCDManager() 
+LCDManager::LCDManager()
     : lcd(I2C_ADDR_LCD, 20, 4),
-      currentPage(DisplayPage::SPLASH),
-      initialized(false),
-      autoScrollEnabled(false),
-      autoScrollInterval(5000),
-      lastScrollTime(0),
-      networkRSSI(0),
-      networkMQTT(false),
-      systemUptime(0),
-      systemTemp(0),
-      systemFreeHeap(0),
-      systemErrorCount(0),
-      lastUpdateTime(0),
-      needsRedraw(true) {
+    currentPage(DisplayPage::SPLASH),
+    initialized(false),
+    autoScrollEnabled(false),
+    autoScrollInterval(5000),
+    lastScrollTime(0),
+    networkRSSI(0),
+    networkMQTT(false),
+    systemUptime(0),
+    systemTemp(0),
+    systemFreeHeap(0),
+    systemErrorCount(0),
+    lastUpdateTime(0),
+    needsRedraw(true) {
     strcpy(networkIP, "0.0.0.0");
 }
 
@@ -40,17 +40,17 @@ LCDManager& LCDManager::getInstance() {
 
 bool LCDManager::init() {
     // Initialize LCD
-    lcd.init();
+    lcd.begin();
     lcd.backlight();
     lcd.clear();
-    
+
     // Create custom characters
     initCustomCharacters();
-    
+
     initialized = true;
     needsRedraw = true;
     currentPage = DisplayPage::SPLASH;
-    
+
     return true;
 }
 
@@ -69,7 +69,7 @@ void LCDManager::clear() {
 
 void LCDManager::setPage(DisplayPage page) {
     if (page >= DisplayPage::MAX_PAGES) return;
-    
+
     if (currentPage != page) {
         currentPage = page;
         needsRedraw = true;
@@ -95,54 +95,54 @@ void LCDManager::prevPage() {
 
 void LCDManager::update() {
     if (!initialized) return;
-    
+
     unsigned long now = millis();
-    
+
     // Handle auto-scroll
     if (autoScrollEnabled && (now - lastScrollTime >= autoScrollInterval)) {
         nextPage();
         lastScrollTime = now;
     }
-    
+
     // Throttle updates to 2Hz
     if (!needsRedraw && (now - lastUpdateTime < 500)) {
         return;
     }
-    
+
     // Render current page
     if (needsRedraw) {
         lcd.clear();
     }
-    
+
     switch (currentPage) {
-        case DisplayPage::SPLASH:
-            renderSplash();
-            break;
-        case DisplayPage::PHASE_A:
-            renderPhase('A', cachedData.phaseA);
-            break;
-        case DisplayPage::PHASE_B:
-            renderPhase('B', cachedData.phaseB);
-            break;
-        case DisplayPage::PHASE_C:
-            renderPhase('C', cachedData.phaseC);
-            break;
-        case DisplayPage::TOTALS:
-            renderTotals();
-            break;
-        case DisplayPage::ENERGY:
-            renderEnergy();
-            break;
-        case DisplayPage::NETWORK:
-            renderNetwork();
-            break;
-        case DisplayPage::SYSTEM:
-            renderSystem();
-            break;
-        default:
-            break;
+    case DisplayPage::SPLASH:
+        renderSplash();
+        break;
+    case DisplayPage::PHASE_A:
+        renderPhase('A', cachedData.phaseA);
+        break;
+    case DisplayPage::PHASE_B:
+        renderPhase('B', cachedData.phaseB);
+        break;
+    case DisplayPage::PHASE_C:
+        renderPhase('C', cachedData.phaseC);
+        break;
+    case DisplayPage::TOTALS:
+        renderTotals();
+        break;
+    case DisplayPage::ENERGY:
+        renderEnergy();
+        break;
+    case DisplayPage::NETWORK:
+        renderNetwork();
+        break;
+    case DisplayPage::SYSTEM:
+        renderSystem();
+        break;
+    default:
+        break;
     }
-    
+
     needsRedraw = false;
     lastUpdateTime = now;
 }
@@ -195,22 +195,22 @@ void LCDManager::renderSplash() {
 
 void LCDManager::renderPhase(char phase, const PhaseData& data) {
     char buffer[21];
-    
+
     // Line 0: Phase header
     lcd.setCursor(0, 0);
     snprintf(buffer, sizeof(buffer), "==== PHASE %c ====", phase);
     lcd.print(buffer);
-    
+
     // Line 1: Voltage and Current
     lcd.setCursor(0, 1);
     snprintf(buffer, sizeof(buffer), "V:%5.1fV  I:%5.2fA", data.voltage, data.current);
     lcd.print(buffer);
-    
+
     // Line 2: Power
     lcd.setCursor(0, 2);
     snprintf(buffer, sizeof(buffer), "P:%6.0fW  PF:%4.2f", data.activePower, data.powerFactor);
     lcd.print(buffer);
-    
+
     // Line 3: Reactive and Apparent
     lcd.setCursor(0, 3);
     snprintf(buffer, sizeof(buffer), "Q:%5.0fVAR S:%5.0fVA", data.reactivePower, data.apparentPower);
@@ -219,45 +219,45 @@ void LCDManager::renderPhase(char phase, const PhaseData& data) {
 
 void LCDManager::renderTotals() {
     char buffer[21];
-    
+
     // Line 0: Header
     lcd.setCursor(0, 0);
     lcd.print("====  TOTALS  ====  ");
-    
+
     // Line 1: Total Active Power
     lcd.setCursor(0, 1);
     snprintf(buffer, sizeof(buffer), "P: %7.0f W", cachedData.totalActivePower);
     lcd.print(buffer);
-    
+
     // Line 2: Total Reactive Power
     lcd.setCursor(0, 2);
     snprintf(buffer, sizeof(buffer), "Q: %7.0f VAR", cachedData.totalReactivePower);
     lcd.print(buffer);
-    
+
     // Line 3: Total Apparent and PF
     lcd.setCursor(0, 3);
-    snprintf(buffer, sizeof(buffer), "S:%5.0fVA PF:%5.2f", 
-             cachedData.totalApparentPower, cachedData.totalPowerFactor);
+    snprintf(buffer, sizeof(buffer), "S:%5.0fVA PF:%5.2f",
+        cachedData.totalApparentPower, cachedData.totalPowerFactor);
     lcd.print(buffer);
 }
 
 void LCDManager::renderEnergy() {
     char buffer[21];
-    
+
     // Line 0: Header
     lcd.setCursor(0, 0);
     lcd.print("====  ENERGY  ====  ");
-    
+
     // Line 1: Import Active Energy
     lcd.setCursor(0, 1);
     snprintf(buffer, sizeof(buffer), "Import:%9.2fkWh", cachedData.importActiveEnergy[0]);
     lcd.print(buffer);
-    
+
     // Line 2: Export Active Energy
     lcd.setCursor(0, 2);
     snprintf(buffer, sizeof(buffer), "Export:%9.2fkWh", cachedData.exportActiveEnergy[0]);
     lcd.print(buffer);
-    
+
     // Line 3: Frequency
     lcd.setCursor(0, 3);
     snprintf(buffer, sizeof(buffer), "Freq: %5.2f Hz", cachedData.frequency);
@@ -266,27 +266,28 @@ void LCDManager::renderEnergy() {
 
 void LCDManager::renderNetwork() {
     char buffer[21];
-    
+
     // Line 0: Header
     lcd.setCursor(0, 0);
     lcd.print("====  NETWORK  ==== ");
-    
+
     // Line 1: IP Address
     lcd.setCursor(0, 1);
     snprintf(buffer, sizeof(buffer), "IP: %-15s", networkIP);
     lcd.print(buffer);
-    
+
     // Line 2: WiFi/Ethernet status
     lcd.setCursor(0, 2);
     if (networkRSSI == -1) {
         lcd.print("ETH: Connected      ");
-    } else {
+    }
+    else {
         snprintf(buffer, sizeof(buffer), "WiFi: %d dBm", networkRSSI);
         lcd.print(buffer);
         // Clear rest of line
         for (int i = strlen(buffer); i < 20; i++) lcd.print(" ");
     }
-    
+
     // Line 3: MQTT status
     lcd.setCursor(0, 3);
     lcd.print("MQTT: ");
@@ -296,11 +297,11 @@ void LCDManager::renderNetwork() {
 
 void LCDManager::renderSystem() {
     char buffer[21];
-    
+
     // Line 0: Header
     lcd.setCursor(0, 0);
     lcd.print("====  SYSTEM  ====  ");
-    
+
     // Line 1: Uptime
     lcd.setCursor(0, 1);
     uint32_t days = systemUptime / 86400;
@@ -308,7 +309,7 @@ void LCDManager::renderSystem() {
     uint32_t mins = (systemUptime % 3600) / 60;
     snprintf(buffer, sizeof(buffer), "Up:%3u %02uh %02um", days, hours, mins);
     lcd.print(buffer);
-    
+
     // Line 2: Temperature and Heap
     lcd.setCursor(0, 2);
     snprintf(buffer, sizeof(buffer), "T:%4.1f", systemTemp);
@@ -316,7 +317,7 @@ void LCDManager::renderSystem() {
     lcd.write(CHAR_DEGREE);
     snprintf(buffer, sizeof(buffer), "C H:%5luKB", systemFreeHeap / 1024);
     lcd.print(buffer);
-    
+
     // Line 3: Error count
     lcd.setCursor(0, 3);
     snprintf(buffer, sizeof(buffer), "Errors: %lu", systemErrorCount);

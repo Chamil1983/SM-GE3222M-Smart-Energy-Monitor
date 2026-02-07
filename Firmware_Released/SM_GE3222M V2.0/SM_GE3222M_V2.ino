@@ -1,19 +1,19 @@
 /**
  * @file SM_GE3222M_V2.ino
  * @brief Main entry point for SM-GE3222M Smart Energy Monitor V2.0
- * 
+ *
  * Production-grade firmware with complete architecture overhaul
- * 
+ *
  * @author Microcode Engineering
  * @version 2.0.0
  * @date 2024
  */
 
-// ============================================================
-// Include All Subsystem Headers
-// ============================================================
+ // ============================================================
+ // Include All Subsystem Headers
+ // ============================================================
 
-// Core subsystem
+ // Core subsystem
 #include "src/core/SystemManager.h"
 #include "src/core/TaskScheduler.h"
 #include "src/core/ErrorHandler.h"
@@ -132,7 +132,7 @@ void taskEthernetCheck() {
  */
 void taskMQTTUpdate() {
     MQTTClient::getInstance().update();
-    
+
     // Publish meter data if connected
     if (MQTTClient::getInstance().isConnected()) {
         MeterData data = EnergyMeter::getInstance().getMeterData();
@@ -145,7 +145,7 @@ void taskMQTTUpdate() {
  */
 void taskHealthCheck() {
     HealthMonitor::getInstance().update();
-    
+
     // Log health warnings
     if (!HealthMonitor::getInstance().isHealthy()) {
         HealthData health = HealthMonitor::getInstance().getHealthData();
@@ -200,7 +200,7 @@ void setup() {
     // Initialize Serial for debugging
     Serial.begin(115200);
     while (!Serial && millis() < 3000); // Wait up to 3s for Serial
-    
+
     Serial.println("\n\n");
     Serial.println("========================================");
     Serial.println("  SM-GE3222M V2.0 Smart Energy Monitor");
@@ -208,56 +208,56 @@ void setup() {
     Serial.println("  Build: " + String(FW_BUILD_DATE) + " " + String(FW_BUILD_TIME));
     Serial.println("========================================");
     Serial.println();
-    
+
     // Initialize Logger first
     Logger::getInstance().init(LogLevel::INFO);
     LOG_INFO("Main", "Starting firmware initialization...");
-    
+
     // Initialize SystemManager (coordinates all subsystems)
     SystemManager& sysMgr = SystemManager::getInstance();
-    
+
     if (!sysMgr.init()) {
         LOG_FATAL("Main", "System initialization failed!");
         while (1) {
             delay(1000);
         }
     }
-    
+
     LOG_INFO("Main", "System initialization complete");
-    
+
     // Register all tasks with TaskScheduler
     TaskScheduler& scheduler = TaskScheduler::getInstance();
-    
+
     // Critical priority tasks
-    scheduler.addTask("EnergyRead", taskEnergyRead, 100, TaskPriority::CRITICAL);
-    scheduler.addTask("ModbusRTU", taskModbusRTUPoll, 50, TaskPriority::CRITICAL);
-    scheduler.addTask("ModbusTCP", taskModbusTCPPoll, 50, TaskPriority::CRITICAL);
-    
+    scheduler.addTask("EnergyRead", taskEnergyRead, 100, TaskPriority::PRIORITY_CRITICAL);
+    scheduler.addTask("ModbusRTU", taskModbusRTUPoll, 50, TaskPriority::PRIORITY_CRITICAL);
+    scheduler.addTask("ModbusTCP", taskModbusTCPPoll, 50, TaskPriority::PRIORITY_CRITICAL);
+
     // High priority tasks
-    scheduler.addTask("WebSocketPush", taskWebSocketPush, 1000, TaskPriority::HIGH);
-    scheduler.addTask("GPIOUpdate", taskGPIOUpdate, 50, TaskPriority::HIGH);
-    
+    scheduler.addTask("WebSocketPush", taskWebSocketPush, 1000, TaskPriority::PRIORITY_HIGH);
+    scheduler.addTask("GPIOUpdate", taskGPIOUpdate, 50, TaskPriority::PRIORITY_HIGH);
+
     // Medium priority tasks
-    scheduler.addTask("LCDUpdate", taskLCDUpdate, 500, TaskPriority::MEDIUM);
-    scheduler.addTask("LEDUpdate", taskLEDUpdate, 100, TaskPriority::MEDIUM);
-    scheduler.addTask("MQTTUpdate", taskMQTTUpdate, 5000, TaskPriority::MEDIUM);
-    scheduler.addTask("PowerQuality", taskPowerQualityAnalysis, 1000, TaskPriority::MEDIUM);
-    
+    scheduler.addTask("LCDUpdate", taskLCDUpdate, 500, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("LEDUpdate", taskLEDUpdate, 100, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("MQTTUpdate", taskMQTTUpdate, 5000, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("PowerQuality", taskPowerQualityAnalysis, 1000, TaskPriority::PRIORITY_MEDIUM);
+
     // Low priority tasks
-    scheduler.addTask("WiFiCheck", taskWiFiCheck, 5000, TaskPriority::LOW);
-    scheduler.addTask("EthernetCheck", taskEthernetCheck, 5000, TaskPriority::LOW);
-    scheduler.addTask("HealthCheck", taskHealthCheck, 10000, TaskPriority::LOW);
-    scheduler.addTask("OTAHandle", taskOTAHandle, 100, TaskPriority::LOW);
-    
+    scheduler.addTask("WiFiCheck", taskWiFiCheck, 5000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("EthernetCheck", taskEthernetCheck, 5000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("HealthCheck", taskHealthCheck, 10000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("OTAHandle", taskOTAHandle, 100, TaskPriority::PRIORITY_LOW);
+
     // Idle priority tasks
-    scheduler.addTask("DataLog", taskDataLog, 30000, TaskPriority::IDLE);
-    scheduler.addTask("EnergyPersist", taskEnergyPersist, 60000, TaskPriority::IDLE);
-    
+    scheduler.addTask("DataLog", taskDataLog, 30000, TaskPriority::PRIORITY_IDLE);
+    scheduler.addTask("EnergyPersist", taskEnergyPersist, 60000, TaskPriority::PRIORITY_IDLE);
+
     LOG_INFO("Main", "All tasks registered with scheduler");
-    
+
     // Transition to RUNNING state
     sysMgr.setState(SystemState::RUNNING);
-    
+
     LOG_INFO("Main", "System is now RUNNING");
     Serial.println("\n*** SM-GE3222M V2.0 is READY ***\n");
 }

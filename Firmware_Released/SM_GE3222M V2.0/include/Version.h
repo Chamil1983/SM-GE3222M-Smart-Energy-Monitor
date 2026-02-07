@@ -1,14 +1,14 @@
 /**
  * @file Version.h
  * @brief Firmware version and build information
- * 
+ *
  * SM-GE3222M Smart Energy Monitor V2.0
  * Production-grade firmware
  */
 
 #pragma once
 
-// Firmware Version
+ // Firmware Version
 #define FW_VERSION_MAJOR 2
 #define FW_VERSION_MINOR 0
 #define FW_VERSION_PATCH 0
@@ -29,5 +29,3 @@
 
 // Compatibility
 #define V1_COMPAT_MODE false  // Set to true to enable V1.0 compatibility mode
-
-#endif // VERSION_H

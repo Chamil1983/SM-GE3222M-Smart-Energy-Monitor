@@ -1,7 +1,7 @@
 /**
  * @file ModbusRegMap.h
  * @brief Modbus register address map
- * 
+ *
  * SM-GE3222M Smart Energy Monitor V2.0
  * Modbus RTU and TCP register addresses for all meter parameters
  */
@@ -10,9 +10,9 @@
 
 #include <Arduino.h>
 
-// ============================================================
-// Device Identification (Read Only - Input Registers)
-// ============================================================
+ // ============================================================
+ // Device Identification (Read Only - Input Registers)
+ // ============================================================
 
 #define MODBUS_VENDOR_NAME          0x0000  // Vendor name (10 registers)
 #define MODBUS_PRODUCT_CODE         0x001E  // Product code (10 registers)
@@ -296,5 +296,3 @@
 #define MODBUS_DI_EXTERNAL_7                0x0417  // External input 7
 #define MODBUS_DI_EXTERNAL_8                0x0418  // External input 8
 #define MODBUS_DI_EXTERNAL_9                0x0419  // External input 9
-
-#endif // MODBUS_REG_MAP_H
