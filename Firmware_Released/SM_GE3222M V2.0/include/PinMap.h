@@ -98,7 +98,7 @@
 
 #define SPI_FREQ_ATM        1000000    // 1 MHz for ATM90E36
 #define SPI_FREQ_W5500      8000000    // 8 MHz for W5500 Ethernet
-#define SPI_MODE            SPI_MODE3  // Clock polarity and phase
+#define ATM_SPI_MODE        SPI_MODE3  // Clock polarity and phase
 
 // ============================================================
 // UART Configuration
@@ -111,5 +111,3 @@
 // ============================================================
 
 #define DHT_TYPE            DHT22      // DHT 22 (AM2302)
-
-#endif // PINMAP_H

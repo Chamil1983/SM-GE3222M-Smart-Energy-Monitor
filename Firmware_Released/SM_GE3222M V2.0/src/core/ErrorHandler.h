@@ -55,6 +55,38 @@ public:
     void reportError(ErrorCode code, const char* module, const char* message);
     
     /**
+     * @brief Convenience method to log error (wraps reportError)
+     * @param code Error code from ErrorCode enum
+     * @param message Error description
+     */
+    void logError(ErrorCode code, const String& message);
+    
+    /**
+     * @brief Log an info message
+     * @param message Info message
+     */
+    void logInfo(const String& message);
+    
+    /**
+     * @brief Log a warning message
+     * @param message Warning message
+     */
+    void logWarning(const String& message);
+    
+    /**
+     * @brief Log a message with specific level
+     * @param level Log level
+     * @param message Message to log
+     */
+    void logMessage(LogLevel level, const String& message);
+    
+    /**
+     * @brief Set error without message (wraps reportError)
+     * @param code Error code to set
+     */
+    void setError(ErrorCode code);
+    
+    /**
      * @brief Get error count for specific error code
      * @param code Error code to query
      * @return Number of times this error has occurred
@@ -107,7 +139,7 @@ public:
 private:
     ErrorHandler() : historyHead(0), historyCount(0), totalErrors(0), criticalErrors(0) {
         // Initialize error counters
-        for (uint8_t i = 0; i < 19; i++) {
+        for (uint8_t i = 0; i < 22; i++) {
             errorCounts[i] = 0;
         }
     }
@@ -120,7 +152,7 @@ private:
     uint8_t historyCount;
     uint32_t totalErrors;
     uint32_t criticalErrors;
-    uint32_t errorCounts[19];  // One counter per ErrorCode
+    uint32_t errorCounts[22];  // One counter per ErrorCode
     
     /**
      * @brief Add error to circular buffer

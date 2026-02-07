@@ -26,8 +26,8 @@ MQTTClient::MQTTClient()
       initialized(false),
       haDiscoveryPublished(false) {
     
-    mqttClient.setBufferSize(MQTT_MAX_PACKET_SIZE);
-    mqttClient.setKeepAlive(MQTT_KEEPALIVE);
+    mqttClient.setBufferSize(MQTT_PACKET_SIZE_MAX);
+    mqttClient.setKeepAlive(MQTT_KEEP_ALIVE_SEC);
     mqttClient.setCallback(messageCallback);
 }
 

@@ -5,8 +5,9 @@
 #include <DNSServer.h>
 #include <esp_wifi.h>
 
-// WiFi configuration structure
-struct WiFiConfig {
+// WiFi runtime configuration structure for WiFiManager
+// Note: Different from GlobalTypes::WiFiConfig which is for storage
+struct WiFiManagerConfig {
     String ssid;
     String password;
     String hostname;
@@ -34,7 +35,7 @@ public:
     static WiFiManager& getInstance();
     
     // Initialize WiFi with configuration
-    bool init(const WiFiConfig& config);
+    bool init(const WiFiManagerConfig& config);
     
     // Connection management
     bool connect();
@@ -81,7 +82,7 @@ private:
     String generateAPSSID();
     void setupCaptivePortal();
     
-    WiFiConfig config_;
+    WiFiManagerConfig config_;
     DNSServer dnsServer_;
     
     // State tracking

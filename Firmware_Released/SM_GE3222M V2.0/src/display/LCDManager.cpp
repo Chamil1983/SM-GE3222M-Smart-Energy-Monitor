@@ -40,7 +40,7 @@ LCDManager& LCDManager::getInstance() {
 
 bool LCDManager::init() {
     // Initialize LCD
-    lcd.init();
+    lcd.begin();
     lcd.backlight();
     lcd.clear();
     

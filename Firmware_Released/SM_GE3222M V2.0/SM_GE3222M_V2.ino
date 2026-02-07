@@ -229,29 +229,29 @@ void setup() {
     TaskScheduler& scheduler = TaskScheduler::getInstance();
     
     // Critical priority tasks
-    scheduler.addTask("EnergyRead", taskEnergyRead, 100, TaskPriority::CRITICAL);
-    scheduler.addTask("ModbusRTU", taskModbusRTUPoll, 50, TaskPriority::CRITICAL);
-    scheduler.addTask("ModbusTCP", taskModbusTCPPoll, 50, TaskPriority::CRITICAL);
+    scheduler.addTask("EnergyRead", taskEnergyRead, 100, TaskPriority::PRIORITY_CRITICAL);
+    scheduler.addTask("ModbusRTU", taskModbusRTUPoll, 50, TaskPriority::PRIORITY_CRITICAL);
+    scheduler.addTask("ModbusTCP", taskModbusTCPPoll, 50, TaskPriority::PRIORITY_CRITICAL);
     
     // High priority tasks
-    scheduler.addTask("WebSocketPush", taskWebSocketPush, 1000, TaskPriority::HIGH);
-    scheduler.addTask("GPIOUpdate", taskGPIOUpdate, 50, TaskPriority::HIGH);
+    scheduler.addTask("WebSocketPush", taskWebSocketPush, 1000, TaskPriority::PRIORITY_HIGH);
+    scheduler.addTask("GPIOUpdate", taskGPIOUpdate, 50, TaskPriority::PRIORITY_HIGH);
     
     // Medium priority tasks
-    scheduler.addTask("LCDUpdate", taskLCDUpdate, 500, TaskPriority::MEDIUM);
-    scheduler.addTask("LEDUpdate", taskLEDUpdate, 100, TaskPriority::MEDIUM);
-    scheduler.addTask("MQTTUpdate", taskMQTTUpdate, 5000, TaskPriority::MEDIUM);
-    scheduler.addTask("PowerQuality", taskPowerQualityAnalysis, 1000, TaskPriority::MEDIUM);
+    scheduler.addTask("LCDUpdate", taskLCDUpdate, 500, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("LEDUpdate", taskLEDUpdate, 100, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("MQTTUpdate", taskMQTTUpdate, 5000, TaskPriority::PRIORITY_MEDIUM);
+    scheduler.addTask("PowerQuality", taskPowerQualityAnalysis, 1000, TaskPriority::PRIORITY_MEDIUM);
     
     // Low priority tasks
-    scheduler.addTask("WiFiCheck", taskWiFiCheck, 5000, TaskPriority::LOW);
-    scheduler.addTask("EthernetCheck", taskEthernetCheck, 5000, TaskPriority::LOW);
-    scheduler.addTask("HealthCheck", taskHealthCheck, 10000, TaskPriority::LOW);
-    scheduler.addTask("OTAHandle", taskOTAHandle, 100, TaskPriority::LOW);
+    scheduler.addTask("WiFiCheck", taskWiFiCheck, 5000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("EthernetCheck", taskEthernetCheck, 5000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("HealthCheck", taskHealthCheck, 10000, TaskPriority::PRIORITY_LOW);
+    scheduler.addTask("OTAHandle", taskOTAHandle, 100, TaskPriority::PRIORITY_LOW);
     
     // Idle priority tasks
-    scheduler.addTask("DataLog", taskDataLog, 30000, TaskPriority::IDLE);
-    scheduler.addTask("EnergyPersist", taskEnergyPersist, 60000, TaskPriority::IDLE);
+    scheduler.addTask("DataLog", taskDataLog, 30000, TaskPriority::PRIORITY_IDLE);
+    scheduler.addTask("EnergyPersist", taskEnergyPersist, 60000, TaskPriority::PRIORITY_IDLE);
     
     LOG_INFO("Main", "All tasks registered with scheduler");
     

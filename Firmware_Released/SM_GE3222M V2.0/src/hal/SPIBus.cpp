@@ -80,7 +80,7 @@ bool SPIBus::beginTransaction(SPIDevice device) {
     
     // Configure SPI for this device
     uint32_t speed = getDeviceSpeed(device);
-    SPI.beginTransaction(SPISettings(speed, MSBFIRST, SPI_MODE));
+    SPI.beginTransaction(SPISettings(speed, MSBFIRST, ATM_SPI_MODE));
     
     // Assert chip select
     selectDevice(device);
