@@ -105,7 +105,7 @@ String CryptoHelper::hashPassword(const String& password, const String& salt) {
         useSalt = generateSalt(16);
     }
     
-    String combined = salt + password;
+    String combined = useSalt + password;
     String hash = getSHA256Hex(combined);
     
     return useSalt + ":" + hash;

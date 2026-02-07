@@ -332,8 +332,8 @@ String AccessControl::getUsernameFromRequest(AsyncWebServerRequest* request) {
 }
 
 String AccessControl::hashPassword(const String& password) {
-    // Use CryptoHelper for password hashing
-    return CryptoHelper::getInstance().sha256(password);
+    // Use CryptoHelper for password hashing (static method)
+    return CryptoHelper::hashPassword(password);
 }
 
 const char* AccessControl::getRoleName(UserRole role) {

@@ -214,7 +214,7 @@ void ButtonHandler::invokeCallback(Button button, Event event) {
         }
         else if (button == Button::SET && event == Event::LONG_PRESS) {
             // Toggle display backlight or other function
-            Logger::info("ButtonHandler", "SET long press - no action defined");
+            Logger::getInstance().info("ButtonHandler", "SET long press - no action defined");
         }
     }
 }
