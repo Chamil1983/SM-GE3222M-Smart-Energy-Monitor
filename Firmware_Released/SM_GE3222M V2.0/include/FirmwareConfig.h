@@ -206,7 +206,9 @@
 // ============================================================
 
 #define OTA_HOSTNAME_PREFIX         "SM-GE3222M"    ///< OTA hostname prefix
-#define OTA_PASSWORD                "admin"         ///< OTA password (change in production!)
+#define OTA_PASSWORD                "admin"         ///< OTA password - CRITICAL: MUST BE CHANGED IN PRODUCTION!
+                                                    ///< This default is INSECURE and should be overridden in ConfigManager
+                                                    ///< or set at compile time for production builds
 #define OTA_PORT                    3232            ///< OTA port
 
 // ============================================================

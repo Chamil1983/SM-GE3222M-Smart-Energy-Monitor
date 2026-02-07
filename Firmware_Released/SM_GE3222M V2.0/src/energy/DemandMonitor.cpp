@@ -15,7 +15,7 @@ DemandMonitor& DemandMonitor::getInstance() {
 
 bool DemandMonitor::init(uint16_t intervalMinutes) {
     if (initialized) {
-        LOG_WARN("DemandMonitor", "Already initialized");
+        LOG_DEBUG("DemandMonitor", "Already initialized");
         return true;
     }
     
