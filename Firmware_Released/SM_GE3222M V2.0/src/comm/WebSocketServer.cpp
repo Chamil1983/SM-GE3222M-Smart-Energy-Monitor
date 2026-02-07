@@ -27,7 +27,7 @@ bool WebSocketServer::init(AsyncWebSocket* ws) {
     }
 
     if (ws == nullptr) {
-        Logger::error("WebSocketServer", "Invalid WebSocket pointer");
+        Logger::getInstance().error("WebSocketServer", "Invalid WebSocket pointer");
         return false;
     }
 
@@ -41,7 +41,7 @@ bool WebSocketServer::init(AsyncWebSocket* ws) {
 
 void WebSocketServer::begin() {
     if (!_initialized) {
-        Logger::error("WebSocketServer", "Not initialized");
+        Logger::getInstance().error("WebSocketServer", "Not initialized");
         return;
     }
 
@@ -127,7 +127,7 @@ void WebSocketServer::onWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketCli
             break;
 
         case WS_EVT_ERROR:
-            Logger::error("WebSocketServer", "Client error");
+            Logger::getInstance().error("WebSocketServer", "Client error");
             break;
 
         case WS_EVT_PONG:
@@ -138,7 +138,7 @@ void WebSocketServer::onWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketCli
 
 void WebSocketServer::handleConnect(AsyncWebSocketClient* client) {
     if (_clientCount >= MAX_CLIENTS) {
-        Logger::warn("WebSocketServer", "Max clients reached, rejecting connection");
+        Logger::getInstance().warn("WebSocketServer", "Max clients reached, rejecting connection");
         client->close();
         return;
     }
@@ -179,7 +179,7 @@ void WebSocketServer::handleMessage(AsyncWebSocketClient* client, uint8_t* data,
     DeserializationError error = deserializeJson(doc, data, len);
 
     if (error) {
-        Logger::warn("WebSocketServer", "Failed to parse client message");
+        Logger::getInstance().warn("WebSocketServer", "Failed to parse client message");
         return;
     }
 

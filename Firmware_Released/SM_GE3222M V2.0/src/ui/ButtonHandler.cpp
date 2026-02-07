@@ -46,7 +46,7 @@ bool ButtonHandler::init() {
     attachInterrupt(digitalPinToInterrupt(_setButton.pin), setButtonISR, CHANGE);
 
     _initialized = true;
-    Logger::info("ButtonHandler", "Initialized successfully");
+    Logger::getInstance().info("ButtonHandler", "Initialized successfully");
     return true;
 }
 

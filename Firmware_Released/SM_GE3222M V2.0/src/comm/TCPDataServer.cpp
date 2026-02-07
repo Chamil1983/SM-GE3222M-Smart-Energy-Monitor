@@ -34,7 +34,7 @@ bool TCPDataServer::init(uint16_t port) {
     _server = new AsyncServer(_port);
     
     if (_server == nullptr) {
-        Logger::error("TCPDataServer", "Failed to create server");
+        Logger::getInstance().error("TCPDataServer", "Failed to create server");
         return false;
     }
 
@@ -44,14 +44,14 @@ bool TCPDataServer::init(uint16_t port) {
     
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Initialized on port %u", _port);
-    Logger::info("TCPDataServer", logMsg);
+    Logger::getInstance().info("TCPDataServer", logMsg);
     
     return true;
 }
 
 void TCPDataServer::begin() {
     if (!_initialized) {
-        Logger::error("TCPDataServer", "Not initialized");
+        Logger::getInstance().error("TCPDataServer", "Not initialized");
         return;
     }
 
@@ -60,7 +60,7 @@ void TCPDataServer::begin() {
     
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Started on port %u", _port);
-    Logger::info("TCPDataServer", logMsg);
+    Logger::getInstance().info("TCPDataServer", logMsg);
 }
 
 void TCPDataServer::stop() {
@@ -79,7 +79,7 @@ void TCPDataServer::stop() {
 
     _server->end();
     _running = false;
-    Logger::info("TCPDataServer", "Stopped");
+    Logger::getInstance().info("TCPDataServer", "Stopped");
 }
 
 void TCPDataServer::update() {
@@ -96,7 +96,7 @@ void TCPDataServer::handleNewClient(void* arg, AsyncClient* client) {
     TCPDataServer* server = static_cast<TCPDataServer*>(arg);
     
     if (server->_clientCount >= MAX_CLIENTS) {
-        Logger::warn("TCPDataServer", "Max clients reached, rejecting connection");
+        Logger::getInstance().warn("TCPDataServer", "Max clients reached, rejecting connection");
         client->close(true);
         delete client;
         return;
@@ -113,7 +113,7 @@ void TCPDataServer::handleNewClient(void* arg, AsyncClient* client) {
 
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Client connected (Total: %d)", server->_clientCount);
-    Logger::info("TCPDataServer", logMsg);
+    Logger::getInstance().info("TCPDataServer", logMsg);
 
     // Send sync handshake
     client->write(SYNC_HANDSHAKE);
@@ -150,11 +150,11 @@ void TCPDataServer::handleClientDisconnect(void* arg, AsyncClient* client) {
     
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Client disconnected (Total: %d)", server->_clientCount);
-    Logger::info("TCPDataServer", logMsg);
+    Logger::getInstance().info("TCPDataServer", logMsg);
 }
 
 void TCPDataServer::handleClientError(void* arg, AsyncClient* client, int8_t error) {
-    Logger::error("TCPDataServer", "Client error occurred");
+    Logger::getInstance().error("TCPDataServer", "Client error occurred");
     TCPDataServer* server = static_cast<TCPDataServer*>(arg);
     server->removeClient(client);
 }
@@ -369,7 +369,7 @@ void TCPDataServer::sendCalibrationData(AsyncClient* client, uint8_t calType) {
 }
 
 void TCPDataServer::resetCalibration(uint8_t calType) {
-    Logger::info("TCPDataServer", ("Resetting calibration type " + String(calType)).c_str());
+    Logger::getInstance().info("TCPDataServer", ("Resetting calibration type " + String(calType)).c_str());
     
     CalibrationConfig cal = ConfigManager::getInstance().getCalibrationConfig();
     CalibrationConfig defaultCal;  // Use default constructor values
@@ -404,18 +404,18 @@ void TCPDataServer::resetCalibration(uint8_t calType) {
 }
 
 void TCPDataServer::saveConfig() {
-    Logger::info("TCPDataServer", "Saving configuration");
+    Logger::getInstance().info("TCPDataServer", "Saving configuration");
     ConfigManager::getInstance().save();
 }
 
 void TCPDataServer::resetConfig() {
-    Logger::info("TCPDataServer", "Resetting configuration");
+    Logger::getInstance().info("TCPDataServer", "Resetting configuration");
     ConfigManager::getInstance().restoreDefaults();
     ConfigManager::getInstance().save();
 }
 
 void TCPDataServer::reboot() {
-    Logger::info("TCPDataServer", "Rebooting device");
+    Logger::getInstance().info("TCPDataServer", "Rebooting device");
     delay(500);
     ESP.restart();
 }

@@ -43,7 +43,7 @@ bool DisplayManager::init() {
 
     // Initialize LCD manager
     if (!LCDManager::getInstance().init()) {
-        Logger::error("DisplayManager", "Failed to initialize LCDManager");
+        Logger::getInstance().error("DisplayManager", "Failed to initialize LCDManager");
         return false;
     }
 
@@ -99,7 +99,7 @@ void DisplayManager::setPage(Page page) {
     // Update LCD page
     LCDManager::getInstance().setPage(pageToDisplayPage(page));
     
-    Logger::debug("DisplayManager", ("Page changed to " + String(static_cast<int>(page))).c_str());
+    Logger::getInstance().debug("DisplayManager", ("Page changed to " + String(static_cast<int>(page))).c_str());
 }
 
 void DisplayManager::nextPage() {
@@ -246,7 +246,7 @@ void DisplayManager::showError(ErrorCode errorCode, const char* message, unsigne
         lcd.displayMessage(3, "Auto-clear...");
     }
 
-    Logger::error("DisplayManager", _errorMessage);
+    Logger::getInstance().error("DisplayManager", _errorMessage);
 }
 
 void DisplayManager::clearError() {
