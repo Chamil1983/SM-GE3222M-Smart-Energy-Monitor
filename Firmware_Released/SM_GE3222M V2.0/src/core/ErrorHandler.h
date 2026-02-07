@@ -87,6 +87,19 @@ public:
     void setError(ErrorCode code);
 
     /**
+     * @brief Set error with message (wraps reportError)
+     * @param code Error code to set
+     * @param message Error description
+     */
+    void setError(ErrorCode code, const char* message);
+
+    /**
+     * @brief Clear a specific error code from tracking
+     * @param code Error code to clear
+     */
+    void clearError(ErrorCode code);
+
+    /**
      * @brief Get error count for specific error code
      * @param code Error code to query
      * @return Number of times this error has occurred
