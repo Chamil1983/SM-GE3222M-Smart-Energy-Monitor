@@ -25,7 +25,7 @@ bool WebServerManager::init() {
     
     // Initialize SPIFFS if not already done
     if (!SPIFFS.begin(true)) {
-        ErrorHandler::getInstance().logError(ErrorCode::SPIFFS_MOUNT_FAILED, "Failed to mount SPIFFS");
+        ErrorHandler::getInstance().logError(ErrorCode::SPIFFS_MOUNT_FAIL, "Failed to mount SPIFFS");
         return false;
     }
     
