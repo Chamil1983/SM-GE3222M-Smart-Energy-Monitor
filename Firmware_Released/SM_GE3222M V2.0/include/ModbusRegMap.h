@@ -296,5 +296,3 @@
 #define MODBUS_DI_EXTERNAL_7                0x0417  // External input 7
 #define MODBUS_DI_EXTERNAL_8                0x0418  // External input 8
 #define MODBUS_DI_EXTERNAL_9                0x0419  // External input 9
-
-#endif // MODBUS_REG_MAP_H

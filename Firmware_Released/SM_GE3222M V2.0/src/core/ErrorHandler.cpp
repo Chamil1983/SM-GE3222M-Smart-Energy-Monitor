@@ -200,3 +200,38 @@ bool ErrorHandler::isCriticalError(ErrorCode code) const {
             return false;
     }
 }
+
+// Convenience logging methods
+void ErrorHandler::logError(ErrorCode code, const String& message) {
+    reportError(code, "System", message.c_str());
+}
+
+void ErrorHandler::logInfo(const String& message) {
+    Serial.print("[INFO] ");
+    Serial.println(message);
+}
+
+void ErrorHandler::logWarning(const String& message) {
+    Serial.print("[WARNING] ");
+    Serial.println(message);
+}
+
+void ErrorHandler::logMessage(LogLevel level, const String& message) {
+    const char* levelStr = "";
+    switch (level) {
+        case LogLevel::TRACE:   levelStr = "TRACE"; break;
+        case LogLevel::DEBUG:   levelStr = "DEBUG"; break;
+        case LogLevel::INFO:    levelStr = "INFO"; break;
+        case LogLevel::WARN:    levelStr = "WARN"; break;
+        case LogLevel::ERROR:   levelStr = "ERROR"; break;
+        case LogLevel::FATAL:   levelStr = "FATAL"; break;
+    }
+    Serial.print("[");
+    Serial.print(levelStr);
+    Serial.print("] ");
+    Serial.println(message);
+}
+
+void ErrorHandler::setError(ErrorCode code) {
+    reportError(code, "System", "");
+}

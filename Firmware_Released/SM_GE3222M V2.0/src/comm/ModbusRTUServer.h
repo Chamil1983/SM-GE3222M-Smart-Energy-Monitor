@@ -90,5 +90,3 @@ private:
     static constexpr uint32_t MODBUS_TIMEOUT = 5000;  // 5 seconds
     static constexpr uint32_t LED_FLASH_DURATION = 50; // 50ms
 };
-
-#endif // MODBUSRTUSERVER_H

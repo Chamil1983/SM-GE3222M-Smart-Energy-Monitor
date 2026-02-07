@@ -19,7 +19,7 @@ WiFiManager::WiFiManager()
       eventHandlerId_(0) {
 }
 
-bool WiFiManager::init(const WiFiConfig& config) {
+bool WiFiManager::init(const WiFiManagerConfig& config) {
     if (initialized_) {
         return true;
     }

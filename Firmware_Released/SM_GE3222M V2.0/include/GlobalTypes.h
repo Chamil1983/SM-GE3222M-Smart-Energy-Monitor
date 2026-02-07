@@ -29,7 +29,10 @@ enum class SystemState {
 enum class ErrorCode {
     NONE = 0,
     SPI_COMM_FAIL,
+    SPI_INIT_FAILED,
     WIFI_DISCONNECTED,
+    WIFI_INIT_FAILED,
+    WIFI_AP_START_FAILED,
     NVS_CORRUPT,
     ATM_INIT_FAIL,
     MODBUS_TIMEOUT,
@@ -40,12 +43,15 @@ enum class ErrorCode {
     CALIBRATION_ERROR,
     MQTT_DISCONNECTED,
     ETHERNET_LINK_DOWN,
+    ETHERNET_INIT_FAILED,
+    ETHERNET_DHCP_FAILED,
     LCD_INIT_FAIL,
     MCP23017_INIT_FAIL,
     CONFIG_LOAD_FAIL,
     CONFIG_SAVE_FAIL,
     ENERGY_READ_FAIL,
-    DHT_READ_FAIL
+    DHT_READ_FAIL,
+    WEB_SERVER_START_FAILED
 };
 
 // ============================================================
@@ -307,11 +313,11 @@ struct ModbusConfig {
 // ============================================================
 
 enum class TaskPriority {
-    CRITICAL = 0,   // Highest priority
-    HIGH = 1,
-    MEDIUM = 2,
-    LOW = 3,
-    IDLE = 4        // Lowest priority
+    PRIORITY_CRITICAL = 0,   // Highest priority
+    PRIORITY_HIGH = 1,
+    PRIORITY_MEDIUM = 2,
+    PRIORITY_LOW = 3,
+    PRIORITY_IDLE = 4        // Lowest priority
 };
 
 // ============================================================
@@ -328,7 +334,7 @@ struct Task {
     unsigned long executionTime;
     
     Task() : name(""), callback(nullptr), interval(0), lastRun(0),
-             priority(TaskPriority::MEDIUM), enabled(false), executionTime(0) {}
+             priority(TaskPriority::PRIORITY_MEDIUM), enabled(false), executionTime(0) {}
 };
 
 // ============================================================
@@ -374,5 +380,3 @@ struct PowerQualityEvent {
     
     PowerQualityEvent() : type(Type::VOLTAGE_SAG), phase(0), value(0), timestamp(0) {}
 };
-
-#endif // GLOBAL_TYPES_H

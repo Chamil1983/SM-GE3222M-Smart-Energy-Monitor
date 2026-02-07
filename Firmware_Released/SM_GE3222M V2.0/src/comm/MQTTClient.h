@@ -92,8 +92,6 @@ private:
     static constexpr uint32_t DEFAULT_PUBLISH_INTERVAL = 5000;  // 5 seconds
     static constexpr uint32_t RECONNECT_DELAY_MIN = 5000;       // 5 seconds
     static constexpr uint32_t RECONNECT_DELAY_MAX = 300000;     // 5 minutes
-    static constexpr uint16_t MQTT_MAX_PACKET_SIZE = 512;
-    static constexpr uint8_t MQTT_KEEPALIVE = 60;
+    static constexpr uint16_t MQTT_PACKET_SIZE_MAX = 512;
+    static constexpr uint8_t MQTT_KEEP_ALIVE_SEC = 60;
 };
-
-#endif // MQTTCLIENT_H

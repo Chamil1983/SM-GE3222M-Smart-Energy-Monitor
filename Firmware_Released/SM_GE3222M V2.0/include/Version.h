@@ -29,5 +29,3 @@
 
 // Compatibility
 #define V1_COMPAT_MODE false  // Set to true to enable V1.0 compatibility mode
-
-#endif // VERSION_H

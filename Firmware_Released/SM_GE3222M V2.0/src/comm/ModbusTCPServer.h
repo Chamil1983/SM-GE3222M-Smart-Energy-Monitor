@@ -88,5 +88,3 @@ private:
     static constexpr uint16_t DEFAULT_PORT = 502;
     static constexpr uint8_t DEFAULT_MAX_CONNECTIONS = 4;
 };
-
-#endif // MODBUSTCPSERVER_H

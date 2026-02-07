@@ -38,7 +38,7 @@ public:
      * @return true if task added successfully, false if scheduler is full
      */
     bool addTask(const char* name, void (*callback)(), unsigned long intervalMs, 
-                 TaskPriority priority = TaskPriority::MEDIUM);
+                 TaskPriority priority = TaskPriority::PRIORITY_MEDIUM);
     
     /**
      * @brief Remove a task from the scheduler

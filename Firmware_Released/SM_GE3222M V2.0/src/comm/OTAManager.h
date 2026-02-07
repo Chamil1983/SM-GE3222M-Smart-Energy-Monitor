@@ -89,5 +89,3 @@ private:
     static constexpr uint16_t DEFAULT_OTA_PORT = 3232;
     static constexpr size_t UPDATE_BUFFER_SIZE = 1024;
 };
-
-#endif // OTAMANAGER_H
