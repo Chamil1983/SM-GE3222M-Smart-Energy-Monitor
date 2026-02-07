@@ -6,7 +6,7 @@
 #include "AccessControl.h"
 #include "AuthManager.h"
 #include "CryptoHelper.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 #include "../storage/NVStorage.h"
 #include <ArduinoJson.h>
 
@@ -32,7 +32,7 @@ bool AccessControl::init() {
 
     // Load users from NVS
     if (!loadUsers()) {
-        Logger::warn("AccessControl", "No users loaded, creating default admin");
+        Logger::getInstance().warn("AccessControl", "No users loaded, creating default admin");
         
         // Create default admin user
         createUser("admin", "admin", UserRole::ADMIN);
@@ -40,7 +40,7 @@ bool AccessControl::init() {
     }
 
     _initialized = true;
-    Logger::info("AccessControl", "Initialized successfully");
+    Logger::getInstance().info("AccessControl", "Initialized successfully");
     return true;
 }
 
@@ -134,13 +134,13 @@ UserRole AccessControl::getUserRole(const String& username) {
 bool AccessControl::setUserRole(const String& username, UserRole role) {
     auto it = _users.find(username);
     if (it == _users.end()) {
-        Logger::warn("AccessControl", ("User not found: " + username).c_str());
+        Logger::getInstance().warn("AccessControl", ("User not found: " + username).c_str());
         return false;
     }
 
     it->second.role = role;
     
-    Logger::info("AccessControl", 
+    Logger::getInstance().info("AccessControl", 
         ("Role changed for " + username + " to " + String(getRoleName(role))).c_str());
     
     return saveUsers();
@@ -148,12 +148,12 @@ bool AccessControl::setUserRole(const String& username, UserRole role) {
 
 bool AccessControl::createUser(const String& username, const String& password, UserRole role) {
     if (username.length() == 0) {
-        Logger::error("AccessControl", "Empty username");
+        Logger::getInstance().error("AccessControl", "Empty username");
         return false;
     }
 
     if (_users.find(username) != _users.end()) {
-        Logger::warn("AccessControl", ("User already exists: " + username).c_str());
+        Logger::getInstance().warn("AccessControl", ("User already exists: " + username).c_str());
         return false;
     }
 
@@ -168,7 +168,7 @@ bool AccessControl::createUser(const String& username, const String& password, U
 
     _users[username] = account;
 
-    Logger::info("AccessControl", ("User created: " + username).c_str());
+    Logger::getInstance().info("AccessControl", ("User created: " + username).c_str());
     return saveUsers();
 }
 
@@ -188,13 +188,13 @@ bool AccessControl::deleteUser(const String& username) {
         }
         
         if (adminCount <= 1) {
-            Logger::error("AccessControl", "Cannot delete last admin user");
+            Logger::getInstance().error("AccessControl", "Cannot delete last admin user");
             return false;
         }
     }
 
     _users.erase(it);
-    Logger::info("AccessControl", ("User deleted: " + username).c_str());
+    Logger::getInstance().info("AccessControl", ("User deleted: " + username).c_str());
     return saveUsers();
 }
 
@@ -206,7 +206,7 @@ bool AccessControl::setUserEnabled(const String& username, bool enabled) {
 
     it->second.enabled = enabled;
     
-    Logger::info("AccessControl", 
+    Logger::getInstance().info("AccessControl", 
         ("User " + username + (enabled ? " enabled" : " disabled")).c_str());
     
     return saveUsers();
@@ -242,7 +242,7 @@ bool AccessControl::loadUsers() {
     
     String jsonData;
     if (!nvs.getString(NVS_NAMESPACE, NVS_USERS_KEY, jsonData)) {
-        Logger::warn("AccessControl", "No user data in NVS");
+        Logger::getInstance().warn("AccessControl", "No user data in NVS");
         return false;
     }
 
@@ -250,7 +250,7 @@ bool AccessControl::loadUsers() {
     DeserializationError error = deserializeJson(doc, jsonData);
     
     if (error) {
-        Logger::error("AccessControl", "Failed to parse user data");
+        Logger::getInstance().error("AccessControl", "Failed to parse user data");
         return false;
     }
 
@@ -270,7 +270,7 @@ bool AccessControl::loadUsers() {
         _users[account.username] = account;
     }
 
-    Logger::info("AccessControl", ("Loaded " + String(_users.size()) + " users").c_str());
+    Logger::getInstance().info("AccessControl", ("Loaded " + String(_users.size()) + " users").c_str());
     return true;
 }
 
@@ -294,11 +294,11 @@ bool AccessControl::saveUsers() {
 
     NVStorage& nvs = NVStorage::getInstance();
     if (!nvs.setString(NVS_NAMESPACE, NVS_USERS_KEY, jsonData)) {
-        Logger::error("AccessControl", "Failed to save users to NVS");
+        Logger::getInstance().error("AccessControl", "Failed to save users to NVS");
         return false;
     }
 
-    Logger::info("AccessControl", "Users saved to NVS");
+    Logger::getInstance().info("AccessControl", "Users saved to NVS");
     return true;
 }
 

@@ -6,7 +6,7 @@
 #include "ExportManager.h"
 #include "DataLogger.h"
 #include "SPIFFSManager.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 #include <SPIFFS.h>
 
 ExportManager& ExportManager::getInstance() {
@@ -26,12 +26,12 @@ bool ExportManager::init() {
 
     // Verify SPIFFS is mounted
     if (!SPIFFS.begin(true)) {
-        Logger::error("ExportManager", "SPIFFS not available");
+        Logger::getInstance().error("ExportManager", "SPIFFS not available");
         return false;
     }
 
     _initialized = true;
-    Logger::info("ExportManager", "Initialized successfully");
+    Logger::getInstance().info("ExportManager", "Initialized successfully");
     return true;
 }
 
@@ -53,7 +53,7 @@ ExportManager::ExportResult ExportManager::exportToFile(const char* outputPath,
     File outFile = SPIFFS.open(outputPath, FILE_WRITE);
     if (!outFile) {
         strcpy(result.errorMessage, "Failed to open output file");
-        Logger::error("ExportManager", result.errorMessage);
+        Logger::getInstance().error("ExportManager", result.errorMessage);
         return result;
     }
 
@@ -85,7 +85,7 @@ ExportManager::ExportResult ExportManager::exportToString(String& output,
         result = exportToStream(output, options);
     } else {
         strcpy(result.errorMessage, "Export too large for string");
-        Logger::warn("ExportManager", "Export exceeds string buffer size");
+        Logger::getInstance().warn("ExportManager", "Export exceeds string buffer size");
     }
 
     return result;
@@ -201,7 +201,7 @@ ExportManager::ExportResult ExportManager::exportCSV(Print& stream,
     File file = SPIFFS.open(_sourceFile, FILE_READ);
     if (!file) {
         strcpy(result.errorMessage, "Source file not found");
-        Logger::error("ExportManager", result.errorMessage);
+        Logger::getInstance().error("ExportManager", result.errorMessage);
         return result;
     }
 
@@ -248,7 +248,7 @@ ExportManager::ExportResult ExportManager::exportCSV(Print& stream,
     file.close();
     result.success = true;
 
-    Logger::info("ExportManager", ("Exported " + String(result.recordCount) + " records (CSV)").c_str());
+    Logger::getInstance().info("ExportManager", ("Exported " + String(result.recordCount) + " records (CSV)").c_str());
     return result;
 }
 
@@ -259,7 +259,7 @@ ExportManager::ExportResult ExportManager::exportJSON(Print& stream,
     File file = SPIFFS.open(_sourceFile, FILE_READ);
     if (!file) {
         strcpy(result.errorMessage, "Source file not found");
-        Logger::error("ExportManager", result.errorMessage);
+        Logger::getInstance().error("ExportManager", result.errorMessage);
         return result;
     }
 
@@ -339,7 +339,7 @@ ExportManager::ExportResult ExportManager::exportJSON(Print& stream,
     file.close();
     result.success = true;
 
-    Logger::info("ExportManager", ("Exported " + String(result.recordCount) + " records (JSON)").c_str());
+    Logger::getInstance().info("ExportManager", ("Exported " + String(result.recordCount) + " records (JSON)").c_str());
     return result;
 }
 

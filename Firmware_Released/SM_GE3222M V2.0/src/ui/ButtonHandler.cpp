@@ -5,7 +5,7 @@
 
 #include "ButtonHandler.h"
 #include "DisplayManager.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 #include "../storage/ConfigManager.h"
 #include "../storage/NVStorage.h"
 #include <ESP.h>
@@ -78,7 +78,7 @@ void ButtonHandler::update() {
             
             _modeButton.factoryResetTriggered = true;
             invokeCallback(Button::MODE, Event::FACTORY_RESET);
-            Logger::warn("ButtonHandler", "Factory reset triggered");
+            Logger::getInstance().warn("ButtonHandler", "Factory reset triggered");
         }
         // Long press check (1s)
         else if (pressDuration >= _longPressThreshold) {
@@ -154,7 +154,7 @@ void ButtonHandler::processPress(Button button, ButtonState& state) {
     state.factoryResetTriggered = false;
 
     const char* buttonName = (button == Button::MODE) ? "MODE" : "SET";
-    Logger::debug("ButtonHandler", (String(buttonName) + " button pressed").c_str());
+    Logger::getInstance().debug("ButtonHandler", (String(buttonName) + " button pressed").c_str());
 }
 
 void ButtonHandler::processRelease(Button button, ButtonState& state) {
@@ -166,7 +166,7 @@ void ButtonHandler::processRelease(Button button, ButtonState& state) {
     if (!state.longPressTriggered && !state.factoryResetTriggered) {
         if (pressDuration < _longPressThreshold) {
             invokeCallback(button, Event::SHORT_PRESS);
-            Logger::debug("ButtonHandler", (String(buttonName) + " short press").c_str());
+            Logger::getInstance().debug("ButtonHandler", (String(buttonName) + " short press").c_str());
         }
     }
 

@@ -4,7 +4,7 @@
  */
 
 #include "DisplayManager.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 
 DisplayManager& DisplayManager::getInstance() {
     static DisplayManager instance;
@@ -51,7 +51,7 @@ bool DisplayManager::init() {
     _currentPage = Page::BOOT;
     _lastRotationTime = millis();
 
-    Logger::info("DisplayManager", "Initialized successfully");
+    Logger::getInstance().info("DisplayManager", "Initialized successfully");
     return true;
 }
 
@@ -271,7 +271,7 @@ void DisplayManager::setAutoRotation(bool enabled, uint32_t intervalMs) {
     
     LCDManager::getInstance().setAutoScroll(enabled, intervalMs);
     
-    Logger::info("DisplayManager", enabled ? "Auto-rotation enabled" : "Auto-rotation disabled");
+    Logger::getInstance().info("DisplayManager", enabled ? "Auto-rotation enabled" : "Auto-rotation disabled");
 }
 
 void DisplayManager::clear() {

@@ -4,7 +4,7 @@
  */
 
 #include "WebSocketServer.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 
 WebSocketServer& WebSocketServer::getInstance() {
     static WebSocketServer instance;
@@ -35,7 +35,7 @@ bool WebSocketServer::init(AsyncWebSocket* ws) {
     _ws->onEvent(onWebSocketEvent);
     
     _initialized = true;
-    Logger::info("WebSocketServer", "Initialized successfully");
+    Logger::getInstance().info("WebSocketServer", "Initialized successfully");
     return true;
 }
 
@@ -48,7 +48,7 @@ void WebSocketServer::begin() {
     _running = true;
     _lastPushTime = millis();
     _lastCleanupTime = millis();
-    Logger::info("WebSocketServer", "Started");
+    Logger::getInstance().info("WebSocketServer", "Started");
 }
 
 void WebSocketServer::stop() {
@@ -59,7 +59,7 @@ void WebSocketServer::stop() {
     _ws->closeAll();
     _running = false;
     _clientCount = 0;
-    Logger::info("WebSocketServer", "Stopped");
+    Logger::getInstance().info("WebSocketServer", "Stopped");
 }
 
 void WebSocketServer::update() {
@@ -148,7 +148,7 @@ void WebSocketServer::handleConnect(AsyncWebSocketClient* client) {
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Client connected: %u (Total: %d)", 
              client->id(), _clientCount);
-    Logger::info("WebSocketServer", logMsg);
+    Logger::getInstance().info("WebSocketServer", logMsg);
 
     // Send welcome message
     StaticJsonDocument<256> doc;
@@ -170,7 +170,7 @@ void WebSocketServer::handleDisconnect(AsyncWebSocketClient* client) {
     char logMsg[64];
     snprintf(logMsg, sizeof(logMsg), "Client disconnected: %u (Total: %d)", 
              client->id(), _clientCount);
-    Logger::info("WebSocketServer", logMsg);
+    Logger::getInstance().info("WebSocketServer", logMsg);
 }
 
 void WebSocketServer::handleMessage(AsyncWebSocketClient* client, uint8_t* data, size_t len) {

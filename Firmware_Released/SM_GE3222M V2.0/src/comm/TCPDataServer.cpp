@@ -4,7 +4,7 @@
  */
 
 #include "TCPDataServer.h"
-#include "../core/Logger.h"
+#include "../diagnostics/Logger.h"
 #include "../storage/ConfigManager.h"
 #include "../energy/EnergyAccumulator.h"
 #include <ESP.h>
@@ -160,7 +160,7 @@ void TCPDataServer::handleClientError(void* arg, AsyncClient* client, int8_t err
 }
 
 void TCPDataServer::processCommand(AsyncClient* client, const String& command) {
-    Logger::debug("TCPDataServer", ("Received: " + command).c_str());
+    Logger::getInstance().debug("TCPDataServer", ("Received: " + command).c_str());
 
     // Check for SYNC handshake
     if (command.indexOf(SYNC_HANDSHAKE) >= 0) {
