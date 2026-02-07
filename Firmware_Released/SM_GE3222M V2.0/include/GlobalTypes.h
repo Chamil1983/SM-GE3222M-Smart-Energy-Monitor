@@ -31,10 +31,13 @@ enum class ErrorCode {
     SPI_COMM_FAIL,
     SPI_INIT_FAILED,
     WIFI_DISCONNECTED,
+    WIFI_INIT_FAILED,
+    WIFI_AP_START_FAILED,
     NVS_CORRUPT,
     ATM_INIT_FAIL,
     MODBUS_TIMEOUT,
     SPIFFS_MOUNT_FAIL,
+    SPIFFS_MOUNT_FAILED,
     I2C_DEVICE_MISSING,
     HEAP_LOW,
     WATCHDOG_RESET,
@@ -48,7 +51,8 @@ enum class ErrorCode {
     CONFIG_LOAD_FAIL,
     CONFIG_SAVE_FAIL,
     ENERGY_READ_FAIL,
-    DHT_READ_FAIL
+    DHT_READ_FAIL,
+    WEB_SERVER_START_FAILED
 };
 
 // ============================================================

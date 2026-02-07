@@ -139,7 +139,7 @@ public:
 private:
     ErrorHandler() : historyHead(0), historyCount(0), totalErrors(0), criticalErrors(0) {
         // Initialize error counters
-        for (uint8_t i = 0; i < 22; i++) {
+        for (uint8_t i = 0; i < 26; i++) {
             errorCounts[i] = 0;
         }
     }
@@ -152,7 +152,7 @@ private:
     uint8_t historyCount;
     uint32_t totalErrors;
     uint32_t criticalErrors;
-    uint32_t errorCounts[22];  // One counter per ErrorCode
+    uint32_t errorCounts[26];  // One counter per ErrorCode
     
     /**
      * @brief Add error to circular buffer
