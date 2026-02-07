@@ -210,7 +210,7 @@ void TCPDataServer::processCommand(AsyncClient* client, const String& command) {
     }
     else if (command == "Reboot") {
         client->write("OK\n");
-        delay(100);
+        // Reboot immediately - delay not needed as ESP.restart() is immediate
         reboot();
     }
 }

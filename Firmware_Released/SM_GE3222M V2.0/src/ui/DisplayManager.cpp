@@ -321,7 +321,8 @@ void DisplayManager::showInitStatus(const char* component, bool success) {
     
     lcd.displayMessage(3, statusLine);
     
-    // Note: Caller should add delay if needed for visibility
+    // Note: Blocking delay was removed to avoid interfering with real-time operations.
+    // Caller should add delay (e.g., 300-500ms) between calls if visibility is needed.
 }
 
 DisplayPage DisplayManager::pageToDisplayPage(Page page) {

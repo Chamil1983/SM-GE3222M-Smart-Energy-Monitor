@@ -204,7 +204,7 @@ void ButtonHandler::invokeCallback(Button button, Event event) {
             
             display.displayMessage(2, "Done!");
             display.displayMessage(3, "Rebooting...");
-            delay(2000);
+            // No delay needed - ESP.restart() is immediate
             
             ESP.restart();
         }
