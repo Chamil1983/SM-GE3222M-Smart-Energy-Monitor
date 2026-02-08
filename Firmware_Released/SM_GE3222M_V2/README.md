@@ -21,9 +21,13 @@ This is the V2.0 firmware for the SM-GE3222M Smart Energy Monitor - a complete a
 - Energy IC driver (ATM90E36Driver, EnergyMeter, EnergyAccumulator)
 - Storage layer (ConfigManager, SPIFFSManager, DataLogger)
 - Network layer (NetworkManager, OTAManager, NTPSync)
-- Communication protocols (TCPDataServer, ProtocolV2, WebServer, ModbusServer, MQTTPublisher)
+- Communication protocols (TCPDataServer, ProtocolV2, WebServer)
 - Task management (TaskManager, EventBus)
 - Diagnostics (Logger, SystemMonitor, WatchdogManager)
+
+✅ **Recently implemented:**
+- ModbusServer (unified RTU + TCP with IEEE754 float encoding)
+- MQTTPublisher (MQTT with Home Assistant discovery)
 
 ## Architecture
 
@@ -60,8 +64,8 @@ SM_GE3222M V2.0/
 │   │   ├── TCPDataServer.*   # 🚧 V1-compatible TCP
 │   │   ├── ProtocolV2.*      # 🚧 JSON structured protocol
 │   │   ├── WebServer.*       # 🚧 REST API + WebSocket
-│   │   ├── ModbusServer.*    # 🚧 Unified RTU + TCP
-│   │   └── MQTTPublisher.*   # 🚧 MQTT with HA discovery
+│   │   ├── ModbusServer.*    # ✅ Unified RTU + TCP
+│   │   └── MQTTPublisher.*   # ✅ MQTT with HA discovery
 │   ├── network/               # Network management
 │   │   ├── NetworkManager.*  # 🚧 WiFi STA/AP management
 │   │   ├── OTAManager.*      # 🚧 Firmware updates
