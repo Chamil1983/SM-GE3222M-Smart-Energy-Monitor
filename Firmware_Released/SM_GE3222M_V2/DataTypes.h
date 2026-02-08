@@ -401,3 +401,34 @@ struct SystemStatus {
         memset(this, 0, sizeof(SystemStatus));
     }
 };
+
+// ============================================================================
+// ENERGY DATA STRUCTURE (Accumulated Energy)
+// ============================================================================
+struct EnergyData {
+    // Per-phase accumulated energy
+    struct PhaseEnergy {
+        double activeEnergyImport;      // Active Energy Import (kWh)
+        double activeEnergyExport;      // Active Energy Export (kWh)
+        double reactiveEnergyImport;    // Reactive Energy Import (kVARh)
+        double reactiveEnergyExport;    // Reactive Energy Export (kVARh)
+        
+        PhaseEnergy() {
+            activeEnergyImport = 0.0;
+            activeEnergyExport = 0.0;
+            reactiveEnergyImport = 0.0;
+            reactiveEnergyExport = 0.0;
+        }
+    };
+    
+    PhaseEnergy phaseA;
+    PhaseEnergy phaseB;
+    PhaseEnergy phaseC;
+    PhaseEnergy total;
+    
+    uint32_t lastUpdateTime;            // Last update timestamp
+    
+    EnergyData() {
+        lastUpdateTime = 0;
+    }
+};
