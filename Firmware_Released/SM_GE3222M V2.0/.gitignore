@@ -1,0 +1,45 @@
+# PlatformIO
+.pio
+.pioenvs
+.piolibdeps
+.vscode
+.clang_complete
+.gcc-flags.json
+
+# Build artifacts
+*.o
+*.elf
+*.bin
+*.map
+
+# IDE
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test results
+test_report.xml
+
+# Logs
+log.txt
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+# Configuration backups
+config.json.bak
+
+# SPIFFS data (don't commit user data)
+data/*.txt
+data/*.log
+!data/index.html
+!data/app.js
+!data/style.css
+!data/config.json
+
+# Python cache
+__pycache__/
+*.pyc
