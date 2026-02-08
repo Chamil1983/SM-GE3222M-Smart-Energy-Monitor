@@ -14,53 +14,71 @@ This is the V2.0 firmware for the SM-GE3222M Smart Energy Monitor, featuring a c
 
 ## Directory Structure
 
+Arduino IDE requires a flat file structure where all source files are in the same directory:
+
 ```
-SM_GE3222M V2.0/
-├── platformio.ini              # Build configuration
+SM_GE3222M_V2/
 ├── ARCHITECTURE.md             # This file
-├── include/                    # Public headers
-│   ├── PinMap.h               # GPIO/SPI/I2C pin definitions
-│   ├── RegisterMap.h          # ATM90E36 register addresses
-│   ├── ModbusMap.h            # Modbus register mapping
-│   └── Version.h              # Firmware version metadata
-├── src/                       # Source code
-│   ├── main.cpp               # Entry point & boot sequence
-│   ├── core/                  # Core framework
-│   │   ├── TaskManager       # FreeRTOS task lifecycle
-│   │   ├── EventBus          # Publish/subscribe events
-│   │   └── DataTypes.h       # Shared data structures
-│   ├── hal/                   # Hardware Abstraction Layer
-│   │   ├── SPIBus            # Thread-safe SPI manager
-│   │   ├── I2CBus            # Thread-safe I2C manager
-│   │   └── GPIOManager       # LED/relay/button control
-│   ├── energy/                # Energy metering
-│   │   ├── ATM90E36Driver    # Low-level IC driver
-│   │   ├── EnergyMeter       # Filtering & validation
-│   │   ├── EnergyAccumulator # kWh accumulation & persistence
-│   │   └── CalibrationManager # Calibration data management
-│   ├── comm/                  # Communication protocols
-│   │   ├── TCPDataServer     # V1-compatible Tag:Value TCP
-│   │   ├── ProtocolV2        # JSON structured protocol
-│   │   ├── WebServer         # REST API + WebSocket
-│   │   ├── ModbusServer      # Unified RTU + TCP Modbus
-│   │   └── MQTTPublisher     # MQTT with HA discovery
-│   ├── network/               # Network management
-│   │   ├── NetworkManager    # WiFi STA/AP management
-│   │   ├── OTAManager        # Firmware updates
-│   │   └── NTPSync           # Time synchronization
-│   ├── storage/               # Data persistence
-│   │   ├── ConfigManager     # NVS-based configuration
-│   │   ├── SPIFFSManager     # Filesystem management
-│   │   └── DataLogger        # On-device data logging
-│   └── diagnostics/           # System diagnostics
-│       ├── Logger            # Leveled logging
-│       ├── SystemMonitor     # Heap/CPU/temp monitoring
-│       └── WatchdogManager   # Hardware watchdog
+├── README.md                   # Setup and usage guide
+├── SM_GE3222M_V2.ino          # Main Arduino sketch file (entry point)
+├── PinMap.h                   # GPIO/SPI/I2C pin definitions
+├── RegisterMap.h              # ATM90E36 register addresses
+├── ModbusMap.h                # Modbus register mapping
+├── Version.h                  # Firmware version metadata
+├── DataTypes.h                # Shared data structures
+├── TaskManager.h              # FreeRTOS task lifecycle
+├── TaskManager.cpp
+├── EventBus.h                 # Publish/subscribe events
+├── EventBus.cpp
+├── SPIBus.h                   # Thread-safe SPI manager
+├── SPIBus.cpp
+├── I2CBus.h                   # Thread-safe I2C manager
+├── I2CBus.cpp
+├── GPIOManager.h              # LED/relay/button control
+├── GPIOManager.cpp
+├── ATM90E36Driver.h           # Low-level IC driver
+├── ATM90E36Driver.cpp
+├── EnergyMeter.h              # Filtering & validation
+├── EnergyMeter.cpp
+├── EnergyAccumulator.h        # kWh accumulation & persistence
+├── EnergyAccumulator.cpp
+├── CalibrationManager.h       # Calibration data management
+├── CalibrationManager.cpp
+├── TCPDataServer.h            # V1-compatible Tag:Value TCP
+├── TCPDataServer.cpp
+├── ProtocolV2.h               # JSON structured protocol
+├── ProtocolV2.cpp
+├── WebServerManager.h         # REST API + WebSocket
+├── WebServerManager.cpp
+├── ModbusServer.h             # Unified RTU + TCP Modbus
+├── ModbusServer.cpp
+├── MQTTPublisher.h            # MQTT with HA discovery
+├── MQTTPublisher.cpp
+├── NetworkManager.h           # WiFi STA/AP management
+├── NetworkManager.cpp
+├── OTAManager.h               # Firmware updates
+├── OTAManager.cpp
+├── NTPSync.h                  # Time synchronization
+├── NTPSync.cpp
+├── ConfigManager.h            # NVS-based configuration
+├── ConfigManager.cpp
+├── SPIFFSManager.h            # Filesystem management
+├── SPIFFSManager.cpp
+├── DataLogger.h               # On-device data logging
+├── DataLogger.cpp
+├── Logger.h                   # Leveled logging
+├── Logger.cpp
+├── SystemMonitor.h            # Heap/CPU/temp monitoring
+├── SystemMonitor.cpp
+├── WatchdogManager.h          # Hardware watchdog
+├── WatchdogManager.cpp
 └── data/                      # SPIFFS web assets
     ├── index.html
     ├── dashboard.js
     └── style.css
 ```
+
+**Note:** Arduino IDE requires all `.h` and `.cpp` files to be in the same folder as the `.ino` file. The flat structure is mandatory for Arduino IDE compatibility.
 
 ## Component Layers
 
@@ -88,7 +106,7 @@ SM_GE3222M V2.0/
 ### Layer 5: Application
 - **TaskManager**: 7 FreeRTOS tasks with core affinity
 - **EventBus**: Decoupled event-driven architecture
-- **main.cpp**: 6-phase boot sequence
+- **SM_GE3222M_V2.ino**: Main sketch file with 6-phase boot sequence
 
 ## Boot Sequence
 
@@ -248,10 +266,25 @@ V2.0 maintains full backward compatibility with V1.0:
 
 ## Development
 
-- **Build**: `pio run`
-- **Upload**: `pio run -t upload`
-- **Monitor**: `pio device monitor`
-- **Test**: `pio test`
+### Build System
+- **Platform**: Arduino IDE 2.0+ (or Arduino IDE 1.8.x)
+- **Board Support**: ESP32 by Espressif Systems
+- **Build Process**: Arduino IDE automatically compiles all `.cpp` files in sketch folder
+- **Board Config**: ESP32 Dev Module, 4MB Flash, Default partition scheme
+- **Upload Method**: Serial (UART0) at 921600 baud or OTA
+
+### Arduino IDE Compatibility Requirements
+1. **Flat File Structure**: All `.h` and `.cpp` files must be in same directory as `.ino` file
+2. **Header Guards**: Use `#pragma once` (recommended) or traditional include guards
+3. **Include Paths**: Direct includes without path prefixes (e.g., `#include "PinMap.h"`)
+4. **Library Dependencies**: All libraries must be installed via Library Manager or manually
+5. **SPIFFS Upload**: Requires ESP32 Sketch Data Upload plugin
+
+### Compilation Notes
+- Arduino IDE processes `.ino` file first, then compiles all `.cpp` files
+- Function prototypes in `.ino` file are automatically generated
+- Libraries are linked in order of inclusion
+- ESP32 Arduino Core provides FreeRTOS support natively
 
 ## License
 

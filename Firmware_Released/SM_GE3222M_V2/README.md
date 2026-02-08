@@ -2,13 +2,13 @@
 
 ## Overview
 
-This is the V2.0 firmware for the SM-GE3222M Smart Energy Monitor - a complete architectural redesign from V1.0 mon olithic structure to a modern, layered, production-grade system based on FreeRTOS.
+This is the V2.0 firmware for the SM-GE3222M Smart Energy Monitor - a complete architectural redesign from V1.0 monolithic structure to a modern, layered, production-grade system based on FreeRTOS.
 
 ## Key Features
 
-✅ **Implemented in this skeleton:**
-- Complete directory structure following layered architecture
-- PlatformIO build configuration with all dependencies
+✅ **Implemented in this release:**
+- Complete flat file structure for Arduino IDE compatibility
+- Arduino IDE build configuration with all dependencies
 - Pin mapping for ESP32 GPIO, SPI, I2C
 - Complete ATM90E36 register map definitions
 - Modbus register layout with IEEE754 float support
@@ -35,49 +35,64 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for complete architectural documentation.
 
 ### Directory Structure
 
+Arduino IDE uses a flat file structure where all source files must be in the same directory as the .ino file:
+
 ```
-SM_GE3222M V2.0/
-├── platformio.ini              # Build configuration
+SM_GE3222M_V2/
 ├── ARCHITECTURE.md             # Architecture documentation
 ├── README.md                   # This file
-├── include/                    # Public headers
-│   ├── PinMap.h               # ✅ GPIO/SPI/I2C pin definitions
-│   ├── RegisterMap.h          # ✅ ATM90E36 register addresses
-│   ├── ModbusMap.h            # ✅ Modbus register mapping
-│   └── Version.h              # ✅ Firmware version metadata
-├── src/                       # Source code
-│   ├── main.cpp               # ✅ Entry point & 6-phase boot
-│   ├── core/                  # Core framework
-│   │   ├── DataTypes.h       # ✅ Shared data structures
-│   │   ├── TaskManager.*     # 🚧 FreeRTOS task lifecycle
-│   │   └── EventBus.*        # 🚧 Publish/subscribe events
-│   ├── hal/                   # Hardware Abstraction Layer
-│   │   ├── SPIBus.*          # 🚧 Thread-safe SPI manager
-│   │   ├── I2CBus.*          # 🚧 Thread-safe I2C manager
-│   │   └── GPIOManager.*     # 🚧 LED/relay/button control
-│   ├── energy/                # Energy metering
-│   │   ├── ATM90E36Driver.*  # 🚧 Low-level IC driver
-│   │   ├── EnergyMeter.*     # 🚧 Filtering & validation
-│   │   ├── EnergyAccumulator.* # 🚧 kWh accumulation
-│   │   └── CalibrationManager.* # 🚧 Calibration management
-│   ├── comm/                  # Communication protocols
-│   │   ├── TCPDataServer.*   # 🚧 V1-compatible TCP
-│   │   ├── ProtocolV2.*      # 🚧 JSON structured protocol
-│   │   ├── WebServer.*       # 🚧 REST API + WebSocket
-│   │   ├── ModbusServer.*    # ✅ Unified RTU + TCP
-│   │   └── MQTTPublisher.*   # ✅ MQTT with HA discovery
-│   ├── network/               # Network management
-│   │   ├── NetworkManager.*  # 🚧 WiFi STA/AP management
-│   │   ├── OTAManager.*      # 🚧 Firmware updates
-│   │   └── NTPSync.*         # 🚧 Time synchronization
-│   ├── storage/               # Data persistence
-│   │   ├── ConfigManager.*   # 🚧 NVS-based configuration
-│   │   ├── SPIFFSManager.*   # 🚧 Filesystem management
-│   │   └── DataLogger.*      # 🚧 On-device data logging
-│   └── diagnostics/           # System diagnostics
-│       ├── Logger.*          # 🚧 Leveled logging
-│       ├── SystemMonitor.*   # 🚧 Heap/CPU monitoring
-│       └── WatchdogManager.* # 🚧 Hardware watchdog
+├── SM_GE3222M_V2.ino          # ✅ Main Arduino sketch file
+├── PinMap.h                   # ✅ GPIO/SPI/I2C pin definitions
+├── RegisterMap.h              # ✅ ATM90E36 register addresses
+├── ModbusMap.h                # ✅ Modbus register mapping
+├── Version.h                  # ✅ Firmware version metadata
+├── DataTypes.h                # ✅ Shared data structures
+├── TaskManager.h              # 🚧 FreeRTOS task lifecycle
+├── TaskManager.cpp
+├── EventBus.h                 # 🚧 Publish/subscribe events
+├── EventBus.cpp
+├── SPIBus.h                   # 🚧 Thread-safe SPI manager
+├── SPIBus.cpp
+├── I2CBus.h                   # 🚧 Thread-safe I2C manager
+├── I2CBus.cpp
+├── GPIOManager.h              # 🚧 LED/relay/button control
+├── GPIOManager.cpp
+├── ATM90E36Driver.h           # 🚧 Low-level IC driver
+├── ATM90E36Driver.cpp
+├── EnergyMeter.h              # 🚧 Filtering & validation
+├── EnergyMeter.cpp
+├── EnergyAccumulator.h        # 🚧 kWh accumulation
+├── EnergyAccumulator.cpp
+├── CalibrationManager.h       # 🚧 Calibration management
+├── CalibrationManager.cpp
+├── TCPDataServer.h            # 🚧 V1-compatible TCP
+├── TCPDataServer.cpp
+├── ProtocolV2.h               # 🚧 JSON structured protocol
+├── ProtocolV2.cpp
+├── WebServerManager.h         # 🚧 REST API + WebSocket
+├── WebServerManager.cpp
+├── ModbusServer.h             # ✅ Unified RTU + TCP
+├── ModbusServer.cpp
+├── MQTTPublisher.h            # ✅ MQTT with HA discovery
+├── MQTTPublisher.cpp
+├── NetworkManager.h           # 🚧 WiFi STA/AP management
+├── NetworkManager.cpp
+├── OTAManager.h               # 🚧 Firmware updates
+├── OTAManager.cpp
+├── NTPSync.h                  # 🚧 Time synchronization
+├── NTPSync.cpp
+├── ConfigManager.h            # 🚧 NVS-based configuration
+├── ConfigManager.cpp
+├── SPIFFSManager.h            # 🚧 Filesystem management
+├── SPIFFSManager.cpp
+├── DataLogger.h               # 🚧 On-device data logging
+├── DataLogger.cpp
+├── Logger.h                   # 🚧 Leveled logging
+├── Logger.cpp
+├── SystemMonitor.h            # 🚧 Heap/CPU monitoring
+├── SystemMonitor.cpp
+├── WatchdogManager.h          # 🚧 Hardware watchdog
+├── WatchdogManager.cpp
 └── data/                      # SPIFFS web assets
     ├── index.html            # 🚧 Dashboard HTML
     ├── dashboard.js          # 🚧 Dashboard JavaScript
@@ -95,7 +110,7 @@ SM_GE3222M V2.0/
 
 ## Pin Mapping
 
-See [include/PinMap.h](include/PinMap.h) for complete pin definitions:
+See [PinMap.h](PinMap.h) for complete pin definitions:
 
 - **SPI (ATM90E36)**: CS=5, MISO=19, MOSI=23, SCK=18
 - **I2C (MCP23017)**: SDA=21, SCL=22
@@ -108,25 +123,72 @@ See [include/PinMap.h](include/PinMap.h) for complete pin definitions:
 
 ### Prerequisites
 
-1. [PlatformIO](https://platformio.org/) installed
-2. ESP32 DevKit board
-3. SM-GE3222M hardware
+1. **Arduino IDE** installed (version 2.0 or later recommended)
+2. **ESP32 board support** installed
+3. **Required libraries** installed (see below)
+4. ESP32 DevKit board
+5. SM-GE3222M hardware
 
-### Build
+### Arduino IDE Setup
 
-```bash
-# Clean build
-pio run -t clean
+#### 1. Install Arduino IDE
+Download and install from [https://www.arduino.cc/en/software](https://www.arduino.cc/en/software)
 
-# Build
-pio run
+#### 2. Install ESP32 Board Support
+1. Open Arduino IDE
+2. Go to **File → Preferences**
+3. Add to "Additional Boards Manager URLs":
+   ```
+   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+   ```
+4. Go to **Tools → Board → Boards Manager**
+5. Search for "ESP32" 
+6. Install **"ESP32 by Espressif Systems"** (version 2.0.0 or later)
 
-# Build and upload
-pio run -t upload
+#### 3. Install Required Libraries
+Go to **Tools → Manage Libraries** and install:
 
-# Monitor serial output
-pio device monitor
-```
+- **ESPAsyncWebServer** by me-no-dev
+- **AsyncTCP** by me-no-dev
+- **ArduinoJson** by Benoit Blanchon (version 6.x)
+- **PubSubClient** by Nick O'Leary
+- **Adafruit MCP23017** by Adafruit
+- **DHT sensor library** by Adafruit
+- **ModbusRTU** by Alexander Emelianov
+- **Button** by Michael Adams
+
+*Note: Some libraries like ESPAsyncWebServer may need to be installed manually from GitHub if not available in Library Manager*
+
+#### 4. Board Configuration
+Configure board settings in **Tools** menu:
+- **Board**: "ESP32 Dev Module"
+- **Flash Size**: "4MB (Default)"
+- **Partition Scheme**: "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+- **Upload Speed**: 921600
+- **CPU Frequency**: 240MHz (WiFi/BT)
+- **Flash Frequency**: 80MHz
+- **Flash Mode**: QIO
+- **Core Debug Level**: "None" (or "Info" for debugging)
+
+### Build and Upload
+
+1. Open `SM_GE3222M_V2.ino` in Arduino IDE
+2. Select your ESP32 board's COM port in **Tools → Port**
+3. Click **Verify** (✓) to compile the sketch
+4. Click **Upload** (→) to flash to ESP32
+5. Open **Tools → Serial Monitor** and set baud rate to **115200**
+
+### Upload SPIFFS Data
+
+To upload web interface files from the `data/` folder:
+
+1. Install **ESP32 Sketch Data Upload** plugin:
+   - Download from [https://github.com/me-no-dev/arduino-esp32fs-plugin/releases](https://github.com/me-no-dev/arduino-esp32fs-plugin/releases)
+   - Follow installation instructions for your OS
+2. Close Serial Monitor if open
+3. Go to **Tools → ESP32 Sketch Data Upload**
+4. Wait for upload to complete
+5. Restart ESP32
 
 ### First Boot
 
@@ -179,9 +241,9 @@ Modern structured protocol:
   "seq": 123,
   "timestamp": 1234567890,
   "phases": {
-    "A": {"V": 230.5, "I": 10.2, "P": 1150, ...},
-    "B": {...},
-    "C": {...}
+    "A": {"V": 230.5, "I": 10.2, "P": 1150},
+    "B": {},
+    "C": {}
   }
 }
 ```
@@ -202,7 +264,7 @@ Real-time data push every second for dashboard updates.
 
 ### Modbus (RTU: Serial2, TCP: Port 502)
 
-IEEE754 float encoding (2 registers per value). See [include/ModbusMap.h](include/ModbusMap.h) for register map.
+IEEE754 float encoding (2 registers per value). See [ModbusMap.h](ModbusMap.h) for register map.
 
 ### MQTT
 
@@ -214,15 +276,22 @@ IEEE754 float encoding (2 registers per value). See [include/ModbusMap.h](includ
 
 ### Adding New Modules
 
-1. Create `.h` and `.cpp` files in appropriate `src/` subdirectory
+1. Create `.h` and `.cpp` files in the same directory as `SM_GE3222M_V2.ino`
 2. Use singleton pattern for managers
-3. Include in `main.cpp` boot sequence
+3. Include headers in the `.ino` file
 4. Add to appropriate FreeRTOS task
 5. Use EventBus for inter-module communication
 
+### Arduino IDE Compatibility Notes
+
+- All source files (`.h`, `.cpp`) must be in the same folder as the `.ino` file
+- Arduino IDE automatically compiles all `.cpp` files in the sketch folder
+- Use `#pragma once` instead of include guards in headers
+- ESP32 Arduino core provides FreeRTOS support natively
+
 ### Coding Style
 
-- C++17 standard
+- C++17 standard (supported by ESP32 Arduino core)
 - `constexpr` for compile-time constants
 - Descriptive variable names (camelCase)
 - Comprehensive comments
@@ -230,9 +299,9 @@ IEEE754 float encoding (2 registers per value). See [include/ModbusMap.h](includ
 
 ### Testing
 
-1. Build with `pio run`
-2. Upload with `pio run -t upload`
-3. Monitor serial at 115200 baud
+1. Verify/compile in Arduino IDE (Ctrl+R / Cmd+R)
+2. Upload to ESP32 (Ctrl+U / Cmd+U)
+3. Open Serial Monitor at 115200 baud
 4. Verify all 6 boot phases complete
 5. Test each communication protocol
 6. Verify energy readings
@@ -258,7 +327,8 @@ Migration steps:
 
 ### Boot Fails at Phase 1
 - Check serial connection (115200 baud)
-- Verify ESP32 board selection in platformio.ini
+- Verify ESP32 board selection in Arduino IDE Tools menu
+- Ensure correct partition scheme is selected
 - Check GPIO connections
 
 ### Boot Fails at Phase 3 (ATM90E36)
@@ -284,6 +354,7 @@ Migration steps:
 - Modbus response: <20ms
 - Free heap after boot: ~150KB
 - SPIFFS usage: <100KB
+- Flash usage: ~1.2MB (program) + ~1.5MB (SPIFFS)
 
 ## Known Limitations
 
@@ -347,4 +418,4 @@ For issues and questions:
 
 - Original V1.0 firmware: Microcode Engineering
 - V2.0 architecture: Modernization initiative
-- Libraries: Arduino, ESP32, PlatformIO ecosystem
+- Libraries: Arduino IDE, ESP32 Arduino Core, open-source community

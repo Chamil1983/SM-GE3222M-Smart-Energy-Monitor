@@ -18,6 +18,7 @@
 #include <SPIFFS.h>
 #include <Preferences.h>
 #include <DHT.h>
+#include <ESPmDNS.h>
 
 // Include files (flat structure for Arduino IDE)
 #include "PinMap.h"
@@ -126,45 +127,43 @@ bool initPhase1_HAL() {
     Serial.printf("Build: %s %s\n", FW_BUILD_DATE, FW_BUILD_TIME);
     Serial.println();
     
-    // TODO: Initialize Logger
-    // if (!Logger::getInstance().init(LogLevel::INFO, true, false)) {
-    //     return checkBootStatus("Logger Init", false);
-    // }
+    // Initialize Logger
+    if (!Logger::getInstance().init(LogLevel::INFO, true, false)) {
+        return checkBootStatus("Logger Init", false);
+    }
     checkBootStep("Logger Init", true);
     
     // Initialize built-in LED for status
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, HIGH);
     
-    // TODO: Initialize GPIOManager
-    // if (!GPIOManager::getInstance().init()) {
-    //     return checkBootStatus("GPIO Manager Init", false);
-    // }
-    // GPIOManager::getInstance().setLEDPattern(LED_PATTERN_BOOT);
+    // Initialize GPIOManager
+    if (!GPIOManager::getInstance().init()) {
+        return checkBootStatus("GPIO Manager Init", false);
+    }
+    GPIOManager::getInstance().setLED(MCP_PORTA_RUN_LED, LED_ON);
     checkBootStep("GPIO Manager Init", true);
     
-    // TODO: Initialize SPI Bus
-    // if (!SPIBus::getInstance().init(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, SPI_FREQUENCY_ATM90E36)) {
-    //     return checkBootStatus("SPI Bus Init", false);
-    // }
-    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI);
+    // Initialize SPI Bus
+    if (!SPIBus::getInstance().init()) {
+        return checkBootStatus("SPI Bus Init", false);
+    }
     checkBootStep("SPI Bus Init", true);
     
-    // TODO: Initialize I2C Bus
-    // if (!I2CBus::getInstance().init(PIN_I2C_SDA, PIN_I2C_SCL, I2C_FREQUENCY)) {
-    //     return checkBootStatus("I2C Bus Init", false);
-    // }
-    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    // Initialize I2C Bus
+    if (!I2CBus::getInstance().init()) {
+        return checkBootStatus("I2C Bus Init", false);
+    }
     checkBootStep("I2C Bus Init", true);
     
-    // TODO: Initialize System Monitor
-    // SystemMonitor::getInstance().init();
+    // Initialize System Monitor
+    SystemMonitor::getInstance().init();
     checkBootStep("System Monitor Init", true);
     
-    // TODO: Initialize Watchdog Manager
-    // if (!WatchdogManager::getInstance().init(30)) {
-    //     return checkBootStatus("Watchdog Init", false);
-    // }
+    // Initialize Watchdog Manager
+    if (!WatchdogManager::getInstance().init(30)) {
+        return checkBootStatus("Watchdog Init", false);
+    }
     checkBootStep("Watchdog Init", true);
     
     return true;
@@ -176,43 +175,45 @@ bool initPhase1_HAL() {
 bool initPhase2_Storage() {
     printBootPhase("2", "Storage & Configuration Loading");
     
-    // TODO: Initialize SPIFFS
-    // if (!SPIFFSManager::getInstance().init()) {
-    //     return checkBootStatus("SPIFFS Mount", false);
-    // }
-    if (!SPIFFS.begin(true)) {
+    // Initialize SPIFFS
+    if (!SPIFFSManager::getInstance().init(true)) {
         return checkBootStatus("SPIFFS Mount", false);
     }
     checkBootStep("SPIFFS Mount", true);
     
     // Print SPIFFS info
-    size_t totalBytes = SPIFFS.totalBytes();
-    size_t usedBytes = SPIFFS.usedBytes();
-    Serial.printf("  SPIFFS: %u KB total, %u KB used\n", totalBytes / 1024, usedBytes / 1024);
+    SPIFFSInfo info = SPIFFSManager::getInstance().getInfo();
+    Serial.printf("  SPIFFS: %u KB total, %u KB used, %u KB free\n", 
+                  info.totalBytes / 1024, info.usedBytes / 1024, info.freeBytes / 1024);
     
-    // TODO: Initialize NVS
-    Preferences prefs;
-    if (!prefs.begin("system", false)) {
-        return checkBootStatus("NVS Init", false);
+    // Initialize NVS and ConfigManager
+    if (!ConfigManager::getInstance().init()) {
+        return checkBootStatus("Config Manager Init", false);
     }
-    
-    // Increment boot count
-    uint32_t bootCount = prefs.getUInt("boot_count", 0) + 1;
-    prefs.putUInt("boot_count", bootCount);
-    prefs.end();
-    Serial.printf("  Boot count: %u\n", bootCount);
-    checkBootStep("NVS Init", true);
-    
-    // TODO: Initialize ConfigManager and load all configurations
-    // if (!ConfigManager::getInstance().init()) {
-    //     return checkBootStatus("Config Manager Init", false);
-    // }
-    // ConfigManager::getInstance().loadAllConfigs();
     checkBootStep("Config Manager Init", true);
+    
+    // Load all configurations
+    WiFiConfig wifiConfig;
+    ModbusConfig modbusConfig;
+    MQTTConfig mqttConfig;
+    NetworkConfig networkConfig;
+    SystemConfig systemConfig;
+    
+    ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
+    ConfigManager::getInstance().loadModbusConfig(modbusConfig);
+    ConfigManager::getInstance().loadMQTTConfig(mqttConfig);
+    ConfigManager::getInstance().loadNetworkConfig(networkConfig);
+    ConfigManager::getInstance().loadSystemConfig(systemConfig);
+    
     checkBootStep("WiFi Config Loaded", true);
     checkBootStep("Modbus Config Loaded", true);
     checkBootStep("MQTT Config Loaded", true);
+    checkBootStep("Network Config Loaded", true);
     checkBootStep("System Config Loaded", true);
+    
+    // Initialize Data Logger
+    DataLogger::getInstance().init(1000); // 1000 entry ring buffer
+    checkBootStep("Data Logger Init", true);
     
     return true;
 }
@@ -223,49 +224,48 @@ bool initPhase2_Storage() {
 bool initPhase3_EnergyMetering() {
     printBootPhase("3", "Energy Metering System Initialization");
     
-    // TODO: Initialize ATM90E36 Driver
-    // CalibrationConfig calConfig;
-    // if (!CalibrationManager::getInstance().loadCalibration(calConfig)) {
-    //     Serial.println("  WARNING: Using default calibration");
-    //     calConfig = CalibrationConfig(); // Use defaults
-    // }
-    // if (!ATM90E36Driver::getInstance().init(calConfig)) {
-    //     return checkBootStatus("ATM90E36 Init", false);
-    // }
+    // Initialize ATM90E36 Driver
+    CalibrationConfig calConfig;
+    if (!CalibrationManager::getInstance().loadCalibration(calConfig)) {
+        Serial.println("  WARNING: Using default calibration");
+        calConfig = CalibrationManager::getInstance().getDefaultCalibration();
+    }
+    if (!ATM90E36Driver::getInstance().init(calConfig)) {
+        return checkBootStatus("ATM90E36 Init", false);
+    }
     checkBootStep("ATM90E36 Init", true);
     checkBootStep("Calibration Applied", true);
     
-    // TODO: Verify checksums
-    // if (!ATM90E36Driver::getInstance().verifyChecksums()) {
-    //     Serial.println("  WARNING: Calibration checksum verification failed");
-    // } else {
-    //     checkBootStep("Checksum Verification", true);
-    // }
-    checkBootStep("Checksum Verification", true);
+    // Verify checksums
+    if (!ATM90E36Driver::getInstance().verifyChecksums()) {
+        Serial.println("  WARNING: Calibration checksum verification failed");
+    } else {
+        checkBootStep("Checksum Verification", true);
+    }
     
-    // TODO: Initialize Energy Meter (with filtering)
-    // if (!EnergyMeter::getInstance().init(5)) { // 5-sample moving average
-    //     return checkBootStatus("Energy Meter Init", false);
-    // }
+    // Initialize Energy Meter (with 5-sample moving average filtering)
+    if (!EnergyMeter::getInstance().init(5)) {
+        return checkBootStatus("Energy Meter Init", false);
+    }
     checkBootStep("Energy Meter Init", true);
     
-    // TODO: Initialize Energy Accumulator and restore state
-    // if (!EnergyAccumulator::getInstance().init(60)) { // Persist every 60 seconds
-    //     return checkBootStatus("Energy Accumulator Init", false);
-    // }
-    // EnergyAccumulator::getInstance().loadFromNVS();
+    // Initialize Energy Accumulator and restore state
+    if (!EnergyAccumulator::getInstance().init(60)) { // Persist every 60 seconds
+        return checkBootStatus("Energy Accumulator Init", false);
+    }
+    EnergyAccumulator::getInstance().loadFromNVS();
     checkBootStep("Energy Accumulator Init", true);
     checkBootStep("Energy State Restored", true);
     
     // Perform initial read
-    // MeterData data;
-    // if (EnergyMeter::getInstance().update()) {
-    //     data = EnergyMeter::getInstance().getSnapshot();
-    //     Serial.printf("  Initial Read: VA=%.1fV IA=%.2fA PA=%.1fW F=%.2fHz\n",
-    //                   data.phaseA.voltageRMS, data.phaseA.currentRMS,
-    //                   data.phaseA.activePower, data.frequency);
-    // }
-    Serial.println("  Initial Read: VA=230.0V IA=5.00A PA=1150.0W F=50.00Hz (SIMULATED)");
+    if (EnergyMeter::getInstance().update()) {
+        MeterData data = EnergyMeter::getInstance().getSnapshot();
+        Serial.printf("  Initial Read: VA=%.1fV IA=%.2fA PA=%.1fW F=%.2fHz\n",
+                      data.phaseA.voltageRMS, data.phaseA.currentRMS,
+                      data.phaseA.activePower, data.frequency);
+    } else {
+        Serial.println("  WARNING: Initial meter read failed");
+    }
     
     return true;
 }
@@ -276,43 +276,42 @@ bool initPhase3_EnergyMetering() {
 bool initPhase4_Network() {
     printBootPhase("4", "Network Layer Initialization");
     
-    // TODO: Initialize Network Manager
-    // WiFiConfig wifiConfig;
-    // ConfigManager::getInstance().getWiFiConfig(wifiConfig);
-    // if (!NetworkManager::getInstance().init(wifiConfig)) {
-    //     Serial.println("  WARNING: WiFi init failed, continuing...");
-    // }
+    // Initialize Network Manager
+    WiFiConfig wifiConfig;
+    ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
+    if (!NetworkManager::getInstance().init(wifiConfig)) {
+        Serial.println("  WARNING: WiFi init failed, continuing...");
+    }
     checkBootStep("Network Manager Init", true);
     
-    // TODO: Connect to WiFi (non-blocking)
-    // if (wifiConfig.enabled) {
-    //     if (wifiConfig.apMode) {
-    //         NetworkManager::getInstance().startAP(wifiConfig.apSSID, wifiConfig.apPassword);
-    //         Serial.printf("  AP Mode: %s\n", wifiConfig.apSSID);
-    //     } else {
-    //         NetworkManager::getInstance().startSTA();
-    //         Serial.printf("  STA Mode: Connecting to %s...\n", wifiConfig.ssid);
-    //     }
-    // }
-    Serial.println("  STA Mode: Connecting to WiFi... (SIMULATED)");
+    // Connect to WiFi (non-blocking)
+    if (wifiConfig.apMode) {
+        NetworkManager::getInstance().startAP(wifiConfig.apSSID, wifiConfig.apPassword);
+        Serial.printf("  AP Mode: %s (IP will be assigned)\n", wifiConfig.apSSID.c_str());
+    } else {
+        NetworkManager::getInstance().startSTA();
+        Serial.printf("  STA Mode: Connecting to %s...\n", wifiConfig.ssid.c_str());
+    }
     checkBootStep("WiFi Started", true);
     
-    // TODO: Initialize mDNS
-    // if (MDNS.begin("ge3222m")) {
-    //     MDNS.addService("http", "tcp", 80);
-    //     MDNS.addService("modbus", "tcp", 502);
-    //     checkBootStep("mDNS Started", true);
-    // }
-    checkBootStep("mDNS Started", true);
+    // Initialize mDNS
+    NetworkConfig netConfig;
+    ConfigManager::getInstance().loadNetworkConfig(netConfig);
+    if (netConfig.mdnsEnabled) {
+        SystemConfig sysConfig;
+        ConfigManager::getInstance().loadSystemConfig(sysConfig);
+        if (MDNS.begin(sysConfig.deviceName.c_str())) {
+            MDNS.addService("http", "tcp", 80);
+            MDNS.addService("modbus", "tcp", 502);
+            checkBootStep("mDNS Started", true);
+        }
+    }
     
-    // TODO: Initialize NTP
-    // NetworkConfig netConfig;
-    // ConfigManager::getInstance().getNetworkConfig(netConfig);
-    // if (netConfig.ntpEnabled) {
-    //     NTPSync::getInstance().init(netConfig.ntpServer, netConfig.timezoneOffset);
-    //     checkBootStep("NTP Sync Started", true);
-    // }
-    checkBootStep("NTP Sync Started", true);
+    // Initialize NTP
+    if (netConfig.ntpEnabled) {
+        NTPSync::getInstance().init(netConfig.ntpServer, netConfig.timezoneOffset);
+        checkBootStep("NTP Sync Started", true);
+    }
     
     return true;
 }
@@ -323,44 +322,51 @@ bool initPhase4_Network() {
 bool initPhase5_Communications() {
     printBootPhase("5", "Communication Protocols Initialization");
     
-    // TODO: Initialize TCP Data Server (V1 compatible)
-    // if (!TCPDataServer::getInstance().begin(8088)) {
-    //     Serial.println("  WARNING: TCP Server init failed");
-    // }
+    // Initialize TCP Data Server (V1 compatible)
+    if (!TCPDataServer::getInstance().begin(8088)) {
+        Serial.println("  WARNING: TCP Server init failed");
+    }
     checkBootStep("TCP Data Server (port 8088)", true);
     
-    // TODO: Initialize Web Server
-    // if (!WebServerManager::getInstance().begin(80)) {
-    //     Serial.println("  WARNING: Web Server init failed");
-    // }
+    // Initialize Web Server
+    if (!WebServerManager::getInstance().begin(80)) {
+        Serial.println("  WARNING: Web Server init failed");
+    }
     checkBootStep("Web Server (port 80)", true);
     checkBootStep("WebSocket (/ws)", true);
     checkBootStep("REST API (/api/*)", true);
     
-    // TODO: Initialize Modbus Server
-    // ModbusConfig modbusConfig;
-    // ConfigManager::getInstance().getModbusConfig(modbusConfig);
-    // if (!ModbusServer::getInstance().begin(modbusConfig)) {
-    //     Serial.println("  WARNING: Modbus init failed");
-    // }
-    checkBootStep("Modbus RTU (Serial2, 9600)", true);
-    checkBootStep("Modbus TCP (port 502)", true);
+    // Initialize Modbus Server
+    ModbusConfig modbusConfig;
+    ConfigManager::getInstance().loadModbusConfig(modbusConfig);
+    if (!ModbusServer::getInstance().begin(modbusConfig)) {
+        Serial.println("  WARNING: Modbus init failed");
+    }
+    if (modbusConfig.rtuEnabled) {
+        checkBootStep("Modbus RTU (Serial2, baud configured)", true);
+    }
+    if (modbusConfig.tcpEnabled) {
+        checkBootStep("Modbus TCP (port 502)", true);
+    }
     
-    // TODO: Initialize MQTT Publisher
-    // MQTTConfig mqttConfig;
-    // ConfigManager::getInstance().getMQTTConfig(mqttConfig);
-    // if (mqttConfig.enabled) {
-    //     if (!MQTTPublisher::getInstance().begin(mqttConfig)) {
-    //         Serial.println("  WARNING: MQTT init failed");
-    //     }
-    //     checkBootStep("MQTT Publisher", true);
-    // }
-    checkBootStep("MQTT Publisher (disabled)", true);
+    // Initialize MQTT Publisher
+    MQTTConfig mqttConfig;
+    ConfigManager::getInstance().loadMQTTConfig(mqttConfig);
+    if (mqttConfig.enabled) {
+        if (!MQTTPublisher::getInstance().begin(mqttConfig)) {
+            Serial.println("  WARNING: MQTT init failed");
+        }
+        checkBootStep("MQTT Publisher", true);
+    } else {
+        checkBootStep("MQTT Publisher (disabled)", true);
+    }
     
-    // TODO: Initialize OTA Manager
-    // if (!OTAManager::getInstance().begin("ge3222m", "admin")) {
-    //     Serial.println("  WARNING: OTA init failed");
-    // }
+    // Initialize OTA Manager
+    SystemConfig sysConfig;
+    ConfigManager::getInstance().loadSystemConfig(sysConfig);
+    if (!OTAManager::getInstance().begin(sysConfig.deviceName, "admin")) {
+        Serial.println("  WARNING: OTA init failed");
+    }
     checkBootStep("OTA Manager", true);
     
     return true;
@@ -372,12 +378,12 @@ bool initPhase5_Communications() {
 bool initPhase6_Tasks() {
     printBootPhase("6", "FreeRTOS Task Creation");
     
-    // TODO: Create all tasks via TaskManager
-    // if (!TaskManager::getInstance().createAllTasks()) {
-    //     return checkBootStatus("Task Creation", false);
-    // }
+    // Create all tasks via TaskManager
+    if (!TaskManager::getInstance().createAllTasks()) {
+        return checkBootStatus("Task Creation", false);
+    }
     
-    // List of tasks to be created:
+    // List of tasks created:
     checkBootStep("EnergyTask (Core 1, Priority 5, 500ms)", true);
     checkBootStep("AccumulatorTask (Core 1, Priority 4, 1000ms)", true);
     checkBootStep("ModbusTask (Core 1, Priority 3, 10ms poll)", true);
@@ -440,8 +446,9 @@ void setup() {
     Serial.printf("  Flash Size: %u MB\n", ESP.getFlashChipSize() / (1024 * 1024));
     Serial.println();
     
-    // TODO: Set system LED to running state
-    // GPIOManager::getInstance().setLEDPattern(LED_PATTERN_RUNNING);
+    // Set system LED to running state
+    GPIOManager::getInstance().setLED(MCP_PORTA_RUN_LED, LED_ON);
+    GPIOManager::getInstance().setLED(MCP_PORTA_FLT_LED, LED_OFF);
     digitalWrite(LED_BUILTIN, LOW);
     
     g_bootComplete = true;
@@ -454,19 +461,15 @@ void loop() {
     // In FreeRTOS-based design, most work is done in tasks
     // Main loop only handles OTA and minimal housekeeping
     
-    // TODO: Handle OTA updates
-    // OTAManager::getInstance().handle();
+    // Handle OTA updates
+    OTAManager::getInstance().handle();
     
-    // TODO: Feed watchdog
-    // WatchdogManager::getInstance().feed();
+    // Handle network manager (reconnection logic)
+    NetworkManager::getInstance().handle();
+    
+    // Feed watchdog
+    WatchdogManager::getInstance().feed();
     
     // Small delay to prevent watchdog issues
     delay(10);
-    
-    // Optional: Blink heartbeat LED
-    static uint32_t lastBlink = 0;
-    if (millis() - lastBlink > 1000) {
-        lastBlink = millis();
-        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
 }
