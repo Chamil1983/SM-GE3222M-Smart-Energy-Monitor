@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SM-GE3222M Energy Monitor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>SM-GE3222M Energy Monitor</h1>
+            <div class="connection-status">
+                <span class="status-indicator" id="wsStatus"></span>
+                <span id="wsStatusText">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- Voltage Gauges -->
+        <section class="gauge-section">
+            <div class="gauge-card phase-a">
+                <h3>Phase A Voltage</h3>
+                <div class="gauge">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                        <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                        <path class="gauge-fill" id="gaugeA" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                    </svg>
+                    <div class="gauge-value" id="voltageA">0.0</div>
+                    <div class="gauge-unit">V</div>
+                </div>
+            </div>
+            <div class="gauge-card phase-b">
+                <h3>Phase B Voltage</h3>
+                <div class="gauge">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                        <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                        <path class="gauge-fill" id="gaugeB" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                    </svg>
+                    <div class="gauge-value" id="voltageB">0.0</div>
+                    <div class="gauge-unit">V</div>
+                </div>
+            </div>
+            <div class="gauge-card phase-c">
+                <h3>Phase C Voltage</h3>
+                <div class="gauge">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                        <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                        <path class="gauge-fill" id="gaugeC" d="M 20 100 A 80 80 0 0 1 180 100"></path>
+                    </svg>
+                    <div class="gauge-value" id="voltageC">0.0</div>
+                    <div class="gauge-unit">V</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Display -->
+        <section class="metrics-section">
+            <div class="metric-card phase-a">
+                <h4>Phase A Current</h4>
+                <div class="metric-value" id="currentA">0.00</div>
+                <div class="metric-unit">A</div>
+            </div>
+            <div class="metric-card phase-b">
+                <h4>Phase B Current</h4>
+                <div class="metric-value" id="currentB">0.00</div>
+                <div class="metric-unit">A</div>
+            </div>
+            <div class="metric-card phase-c">
+                <h4>Phase C Current</h4>
+                <div class="metric-value" id="currentC">0.00</div>
+                <div class="metric-unit">A</div>
+            </div>
+        </section>
+
+        <!-- Power Display -->
+        <section class="power-section">
+            <div class="power-group">
+                <h3>Active Power</h3>
+                <div class="power-grid">
+                    <div class="power-card phase-a">
+                        <span class="phase-label">Phase A</span>
+                        <span class="power-value" id="powerA">0.00</span>
+                        <span class="power-unit">kW</span>
+                    </div>
+                    <div class="power-card phase-b">
+                        <span class="phase-label">Phase B</span>
+                        <span class="power-value" id="powerB">0.00</span>
+                        <span class="power-unit">kW</span>
+                    </div>
+                    <div class="power-card phase-c">
+                        <span class="phase-label">Phase C</span>
+                        <span class="power-value" id="powerC">0.00</span>
+                        <span class="power-unit">kW</span>
+                    </div>
+                    <div class="power-card total">
+                        <span class="phase-label">Total</span>
+                        <span class="power-value" id="powerTotal">0.00</span>
+                        <span class="power-unit">kW</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="power-group">
+                <h3>Reactive Power</h3>
+                <div class="power-grid">
+                    <div class="power-card phase-a">
+                        <span class="phase-label">Phase A</span>
+                        <span class="power-value" id="reactivePowerA">0.00</span>
+                        <span class="power-unit">kVAR</span>
+                    </div>
+                    <div class="power-card phase-b">
+                        <span class="phase-label">Phase B</span>
+                        <span class="power-value" id="reactivePowerB">0.00</span>
+                        <span class="power-unit">kVAR</span>
+                    </div>
+                    <div class="power-card phase-c">
+                        <span class="phase-label">Phase C</span>
+                        <span class="power-value" id="reactivePowerC">0.00</span>
+                        <span class="power-unit">kVAR</span>
+                    </div>
+                    <div class="power-card total">
+                        <span class="phase-label">Total</span>
+                        <span class="power-value" id="reactivePowerTotal">0.00</span>
+                        <span class="power-unit">kVAR</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="power-group">
+                <h3>Apparent Power</h3>
+                <div class="power-grid">
+                    <div class="power-card phase-a">
+                        <span class="phase-label">Phase A</span>
+                        <span class="power-value" id="apparentPowerA">0.00</span>
+                        <span class="power-unit">kVA</span>
+                    </div>
+                    <div class="power-card phase-b">
+                        <span class="phase-label">Phase B</span>
+                        <span class="power-value" id="apparentPowerB">0.00</span>
+                        <span class="power-unit">kVA</span>
+                    </div>
+                    <div class="power-card phase-c">
+                        <span class="phase-label">Phase C</span>
+                        <span class="power-value" id="apparentPowerC">0.00</span>
+                        <span class="power-unit">kVA</span>
+                    </div>
+                    <div class="power-card total">
+                        <span class="phase-label">Total</span>
+                        <span class="power-value" id="apparentPowerTotal">0.00</span>
+                        <span class="power-unit">kVA</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Power Factor -->
+        <section class="metrics-section">
+            <div class="metric-card phase-a">
+                <h4>Phase A PF</h4>
+                <div class="metric-value" id="pfA">0.00</div>
+                <div class="metric-unit">PF</div>
+            </div>
+            <div class="metric-card phase-b">
+                <h4>Phase B PF</h4>
+                <div class="metric-value" id="pfB">0.00</div>
+                <div class="metric-unit">PF</div>
+            </div>
+            <div class="metric-card phase-c">
+                <h4>Phase C PF</h4>
+                <div class="metric-value" id="pfC">0.00</div>
+                <div class="metric-unit">PF</div>
+            </div>
+            <div class="metric-card total">
+                <h4>Total PF</h4>
+                <div class="metric-value" id="pfTotal">0.00</div>
+                <div class="metric-unit">PF</div>
+            </div>
+        </section>
+
+        <!-- System Info -->
+        <section class="info-section">
+            <div class="info-card">
+                <h4>Frequency</h4>
+                <div class="info-value" id="frequency">0.00</div>
+                <div class="info-unit">Hz</div>
+            </div>
+            <div class="info-card">
+                <h4>Temperature</h4>
+                <div class="info-value" id="temperature">0.0</div>
+                <div class="info-unit">°C</div>
+            </div>
+        </section>
+
+        <!-- Energy Counters -->
+        <section class="energy-section">
+            <h3>Energy Counters</h3>
+            <div class="energy-grid">
+                <div class="energy-card">
+                    <h4>Total Import Energy</h4>
+                    <div class="energy-value" id="importEnergy">0.000</div>
+                    <div class="energy-unit">kWh</div>
+                </div>
+                <div class="energy-card">
+                    <h4>Total Export Energy</h4>
+                    <div class="energy-value" id="exportEnergy">0.000</div>
+                    <div class="energy-unit">kWh</div>
+                </div>
+                <div class="energy-card">
+                    <h4>Reactive Import</h4>
+                    <div class="energy-value" id="reactiveImport">0.000</div>
+                    <div class="energy-unit">kVARh</div>
+                </div>
+                <div class="energy-card">
+                    <h4>Reactive Export</h4>
+                    <div class="energy-value" id="reactiveExport">0.000</div>
+                    <div class="energy-unit">kVARh</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Status -->
+        <section class="system-section">
+            <h3>System Status</h3>
+            <div class="system-grid">
+                <div class="system-card">
+                    <span class="system-label">Uptime</span>
+                    <span class="system-value" id="uptime">00:00:00</span>
+                </div>
+                <div class="system-card">
+                    <span class="system-label">Free Heap</span>
+                    <span class="system-value" id="freeHeap">0</span>
+                </div>
+                <div class="system-card">
+                    <span class="system-label">WiFi RSSI</span>
+                    <span class="system-value" id="rssi">0</span>
+                </div>
+                <div class="system-card">
+                    <span class="system-label">IP Address</span>
+                    <span class="system-value" id="ipAddress">0.0.0.0</span>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <p>SM-GE3222M V2.0 Energy Monitor Dashboard</p>
+            <p>Last Update: <span id="lastUpdate">--</span></p>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
