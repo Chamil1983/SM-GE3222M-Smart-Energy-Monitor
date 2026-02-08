@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{8A3D4C12-5B6E-4F9A-9D8E-1C2F3A4B5D6E}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>MeterGE3222M.Core</RootNamespace>
+    <AssemblyName>MeterGE3222M.Core</AssemblyName>
+    <FileAlignment>512</FileAlignment>
+    <MyType>Windows</MyType>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <OptionStrict>On</OptionStrict>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <DefineDebug>true</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DocumentationFile>MeterGE3222M.Core.xml</DocumentationFile>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <DefineDebug>false</DefineDebug>
+    <DefineTrace>true</DefineTrace>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DocumentationFile>MeterGE3222M.Core.xml</DocumentationFile>
+    <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Net" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Net.WebSockets" />
+    <Reference Include="System.Net.WebSockets.Client" />
+    <Reference Include="System.IO.Ports" />
+    <Reference Include="System.Text.Json">
+      <HintPath>$(ProgramFiles)\dotnet\shared\Microsoft.NETCore.App\3.1.0\System.Text.Json.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="Microsoft.VisualBasic" />
+    <Import Include="System" />
+    <Import Include="System.Collections" />
+    <Import Include="System.Collections.Generic" />
+    <Import Include="System.Diagnostics" />
+    <Import Include="System.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Models\PhaseData.vb" />
+    <Compile Include="Models\MeterSnapshot.vb" />
+    <Compile Include="Models\CalibrationData.vb" />
+    <Compile Include="Models\MeterConfig.vb" />
+    <Compile Include="Models\LogEntry.vb" />
+    <Compile Include="Communication\IMeterConnection.vb" />
+    <Compile Include="Communication\TCPTransport.vb" />
+    <Compile Include="Communication\SerialTransport.vb" />
+    <Compile Include="Communication\WebSocketTransport.vb" />
+    <Compile Include="Communication\ProtocolParser.vb" />
+    <Compile Include="Communication\ProtocolV1Parser.vb" />
+    <Compile Include="Communication\ProtocolV2Parser.vb" />
+    <Compile Include="Communication\CommandSender.vb" />
+    <Compile Include="Services\MeterDataService.vb" />
+    <Compile Include="Services\CalibrationService.vb" />
+    <Compile Include="Services\ConfigurationService.vb" />
+    <Compile Include="Services\DataLoggerService.vb" />
+    <Compile Include="Helpers\FloatConverter.vb" />
+    <Compile Include="Helpers\ChecksumHelper.vb" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
+</Project>
