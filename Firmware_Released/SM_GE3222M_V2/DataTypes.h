@@ -285,7 +285,7 @@ struct MQTTConfig {
     bool    useHomeAssistant;   // Enable Home Assistant discovery
     bool    useTLS;             // Enable TLS/SSL
     
-    MQTT Config() {
+    MQTTConfig() {
         enabled = false;
         port = 1883;
         publishInterval = 10;

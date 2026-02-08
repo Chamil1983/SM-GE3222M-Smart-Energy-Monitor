@@ -314,6 +314,54 @@ void ModbusServer::updateMeterData(const MeterData& data) {
     _inputRegisters[MB_REV_ACTIVE_ENERGY_T] = highWord;
     _inputRegisters[MB_REV_ACTIVE_ENERGY_T + 1] = lowWord;
     
+    float2registers(data.phaseA.fwdReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_A] = highWord;
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_A + 1] = lowWord;
+    
+    float2registers(data.phaseB.fwdReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_B] = highWord;
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_B + 1] = lowWord;
+    
+    float2registers(data.phaseC.fwdReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_C] = highWord;
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_C + 1] = lowWord;
+    
+    float2registers(data.totalFwdReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_T] = highWord;
+    _inputRegisters[MB_FWD_REACTIVE_ENERGY_T + 1] = lowWord;
+    
+    float2registers(data.phaseA.revReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_A] = highWord;
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_A + 1] = lowWord;
+    
+    float2registers(data.phaseB.revReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_B] = highWord;
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_B + 1] = lowWord;
+    
+    float2registers(data.phaseC.revReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_C] = highWord;
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_C + 1] = lowWord;
+    
+    float2registers(data.totalRevReactiveEnergy, highWord, lowWord);
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_T] = highWord;
+    _inputRegisters[MB_REV_REACTIVE_ENERGY_T + 1] = lowWord;
+    
+    float2registers(data.phaseA.apparentEnergy, highWord, lowWord);
+    _inputRegisters[MB_APPARENT_ENERGY_A] = highWord;
+    _inputRegisters[MB_APPARENT_ENERGY_A + 1] = lowWord;
+    
+    float2registers(data.phaseB.apparentEnergy, highWord, lowWord);
+    _inputRegisters[MB_APPARENT_ENERGY_B] = highWord;
+    _inputRegisters[MB_APPARENT_ENERGY_B + 1] = lowWord;
+    
+    float2registers(data.phaseC.apparentEnergy, highWord, lowWord);
+    _inputRegisters[MB_APPARENT_ENERGY_C] = highWord;
+    _inputRegisters[MB_APPARENT_ENERGY_C + 1] = lowWord;
+    
+    float2registers(data.totalApparentEnergy, highWord, lowWord);
+    _inputRegisters[MB_APPARENT_ENERGY_T] = highWord;
+    _inputRegisters[MB_APPARENT_ENERGY_T + 1] = lowWord;
+    
     float2registers(data.phaseA.fundamentalPower, highWord, lowWord);
     _inputRegisters[MB_FUNDAMENTAL_POWER_A] = highWord;
     _inputRegisters[MB_FUNDAMENTAL_POWER_A + 1] = lowWord;
