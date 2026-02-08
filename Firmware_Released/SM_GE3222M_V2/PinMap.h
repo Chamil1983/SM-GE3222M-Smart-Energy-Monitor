@@ -78,6 +78,9 @@ constexpr uint8_t PIN_DHT               = 4;    // GPIO4 - DHT Temperature/Humid
 // Serial2 (UART2) - Modbus RTU
 constexpr uint8_t PIN_UART2_TX          = 17;   // GPIO17 - UART2 TX (Modbus)
 constexpr uint8_t PIN_UART2_RX          = 16;   // GPIO16 - UART2 RX (Modbus)
+constexpr uint8_t PIN_MODBUS_TX         = PIN_UART2_TX;
+constexpr uint8_t PIN_MODBUS_RX         = PIN_UART2_RX;
+constexpr uint8_t PIN_MODBUS_DE         = 27;   // GPIO27 - Modbus DE/RE Control
 
 // ============================================================================
 // Ethernet Interface (W5500) - if used
