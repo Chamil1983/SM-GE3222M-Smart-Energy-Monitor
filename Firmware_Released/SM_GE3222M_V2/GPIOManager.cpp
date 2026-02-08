@@ -11,7 +11,7 @@ GPIOManager::GPIOManager()
 {
     m_mutex = xSemaphoreCreateMutex();
     if (m_mutex == NULL) {
-        Logger::error("GPIOManager: Failed to create mutex");
+        Logger::getInstance().error("GPIOManager: Failed to create mutex");
     }
 
     // Initialize blink states
@@ -43,7 +43,7 @@ GPIOManager::~GPIOManager() {
 
 bool GPIOManager::init() {
     if (m_initialized) {
-        Logger::warning("GPIOManager: Already initialized");
+        Logger::getInstance().warn("GPIOManager: Already initialized");
         return true;
     }
 
@@ -51,14 +51,14 @@ bool GPIOManager::init() {
     I2CBus& i2c = I2CBus::getInstance();
     if (!i2c.isInitialized()) {
         if (!i2c.init()) {
-            Logger::error("GPIOManager: Failed to initialize I2C bus");
+            Logger::getInstance().error("GPIOManager: Failed to initialize I2C bus");
             return false;
         }
     }
 
     // Initialize MCP23017
     if (!m_mcp.begin_I2C(I2C_ADDR_MCP23017)) {
-        Logger::error("GPIOManager: Failed to initialize MCP23017 at 0x%02X", I2C_ADDR_MCP23017);
+        Logger::getInstance().error("GPIOManager: Failed to initialize MCP23017 at 0x%02X", I2C_ADDR_MCP23017);
         return false;
     }
 
@@ -67,7 +67,7 @@ bool GPIOManager::init() {
     setupLEDs();
 
     m_initialized = true;
-    Logger::info("GPIOManager: Initialized successfully");
+    Logger::getInstance().info("GPIOManager: Initialized successfully");
     
     return true;
 }
@@ -84,7 +84,7 @@ void GPIOManager::setupMCP23017() {
         m_mcp.pinMode(i, INPUT_PULLUP);
     }
 
-    Logger::info("GPIOManager: MCP23017 configured (PortA=outputs, PortB=inputs)");
+    Logger::getInstance().info("GPIOManager: MCP23017 configured (PortA=outputs, PortB=inputs)");
 }
 
 void GPIOManager::setupButtons() {
@@ -92,7 +92,7 @@ void GPIOManager::setupButtons() {
     pinMode(PIN_BUTTON_SET, INPUT_PULLUP);
     pinMode(PIN_BUTTON_MODE, INPUT_PULLUP);
 
-    Logger::info("GPIOManager: Buttons configured (SET=GPIO%d, MODE=GPIO%d)", 
+    Logger::getInstance().info("GPIOManager: Buttons configured (SET=GPIO%d, MODE=GPIO%d)", 
                  PIN_BUTTON_SET, PIN_BUTTON_MODE);
 }
 
@@ -103,7 +103,7 @@ void GPIOManager::setupLEDs() {
     setLED(LED::WIFI, false);
     setLED(LED::MODBUS, false);
 
-    Logger::info("GPIOManager: LEDs initialized (all OFF)");
+    Logger::getInstance().info("GPIOManager: LEDs initialized (all OFF)");
 }
 
 void GPIOManager::setLED(LED led, bool state) {
@@ -218,7 +218,7 @@ void GPIOManager::setRelay(Relay relay, bool state) {
 
     xSemaphoreGive(m_mutex);
 
-    Logger::debug("GPIOManager: Relay %d set to %s", 
+    Logger::getInstance().debug("GPIOManager: Relay %d set to %s", 
                   pin, state ? "ON" : "OFF");
 }
 
