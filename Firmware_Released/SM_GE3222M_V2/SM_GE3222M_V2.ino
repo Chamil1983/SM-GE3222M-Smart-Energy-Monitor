@@ -13,55 +13,55 @@
  * Phase 6: Task Launch - Create all FreeRTOS tasks
  */
 
-#include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <SPIFFS.h>
 #include <Preferences.h>
+#include <DHT.h>
 
-// Include files
+// Include files (flat structure for Arduino IDE)
 #include "PinMap.h"
 #include "Version.h"
 #include "RegisterMap.h"
 #include "ModbusMap.h"
-#include "core/DataTypes.h"
+#include "DataTypes.h"
 
-// TODO: Include HAL modules
-// #include "hal/SPIBus.h"
-// #include "hal/I2CBus.h"
-// #include "hal/GPIOManager.h"
+// HAL modules
+#include "SPIBus.h"
+#include "I2CBus.h"
+#include "GPIOManager.h"
 
-// TODO: Include Energy modules
-// #include "energy/ATM90E36Driver.h"
-// #include "energy/EnergyMeter.h"
-// #include "energy/EnergyAccumulator.h"
-// #include "energy/CalibrationManager.h"
+// Energy modules
+#include "ATM90E36Driver.h"
+#include "EnergyMeter.h"
+#include "EnergyAccumulator.h"
+#include "CalibrationManager.h"
 
-// TODO: Include Storage modules
-// #include "storage/ConfigManager.h"
-// #include "storage/SPIFFSManager.h"
-// #include "storage/DataLogger.h"
+// Storage modules
+#include "ConfigManager.h"
+#include "SPIFFSManager.h"
+#include "DataLogger.h"
 
-// TODO: Include Network modules
-// #include "network/NetworkManager.h"
-// #include "network/OTAManager.h"
-// #include "network/NTPSync.h"
+// Network modules
+#include "NetworkManager.h"
+#include "OTAManager.h"
+#include "NTPSync.h"
 
-// TODO: Include Communication modules
-// #include "comm/TCPDataServer.h"
-// #include "comm/ProtocolV2.h"
-// #include "comm/WebServer.h"
-// #include "comm/ModbusServer.h"
-// #include "comm/MQTTPublisher.h"
+// Communication modules
+#include "TCPDataServer.h"
+#include "ProtocolV2.h"
+#include "WebServerManager.h"
+#include "ModbusServer.h"
+#include "MQTTPublisher.h"
 
-// TODO: Include Core modules
-// #include "core/TaskManager.h"
-// #include "core/EventBus.h"
+// Core modules
+#include "TaskManager.h"
+#include "EventBus.h"
 
-// TODO: Include Diagnostics modules
-// #include "diagnostics/Logger.h"
-// #include "diagnostics/SystemMonitor.h"
-// #include "diagnostics/WatchdogManager.h"
+// Diagnostics modules
+#include "Logger.h"
+#include "SystemMonitor.h"
+#include "WatchdogManager.h"
 
 // ============================================================================
 // GLOBAL STATE
