@@ -515,17 +515,17 @@ float ATM90E36Driver::getVoltageTHDC() {
 
 float ATM90E36Driver::getCurrentTHDA() {
     uint16_t val = readRegister(REG_THD_NI_A);
-    return (float)val / CURRENT_SCALE;
+    return (float)val / THD_SCALE;
 }
 
 float ATM90E36Driver::getCurrentTHDB() {
     uint16_t val = readRegister(REG_THD_NI_B);
-    return (float)val / CURRENT_SCALE;
+    return (float)val / THD_SCALE;
 }
 
 float ATM90E36Driver::getCurrentTHDC() {
     uint16_t val = readRegister(REG_THD_NI_C);
-    return (float)val / CURRENT_SCALE;
+    return (float)val / THD_SCALE;
 }
 
 // ============================================================================

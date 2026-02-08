@@ -17,7 +17,7 @@
 
 #include <Arduino.h>
 #include "RegisterMap.h"
-#include "core/DataTypes.h"
+#include "DataTypes.h"
 
 class ATM90E36Driver {
 public:
