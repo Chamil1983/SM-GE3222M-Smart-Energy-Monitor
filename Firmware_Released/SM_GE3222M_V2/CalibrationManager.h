@@ -46,7 +46,11 @@ public:
      * Get factory default calibration (V1.0 specifications)
      * @return Default calibration configuration
      */
-    CalibrationConfig getDefaultCalibration();
+        // Compatibility helpers for ProtocolV2
+    bool getCalibration(CalibrationConfig& config) { return loadCalibration(config); }
+    bool setCalibration(const CalibrationConfig& config) { return saveCalibration(config); }
+
+CalibrationConfig getDefaultCalibration();
 
 private:
     // Singleton - prevent copying

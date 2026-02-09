@@ -1,6 +1,7 @@
 #include "TCPDataServer.h"
 #include "Logger.h"
 #include "EnergyMeter.h"
+#include "SystemMonitor.h"
 #include "ConfigManager.h"
 #include <cstring>
 
@@ -15,16 +16,14 @@ TCPDataServer::~TCPDataServer() {
 
 bool TCPDataServer::begin(uint16_t port) {
     if (_running) {
-        Logger::log(LogLevel::WARN, "TCP", "Server already running");
-        return true;
+        Logger::getInstance().warn("[TCP] Server already running");return true;
     }
     
     _port = port;
     _server = new AsyncServer(_port);
     
     if (!_server) {
-        Logger::log(LogLevel::ERROR, "TCP", "Failed to create server");
-        return false;
+        Logger::getInstance().error("[TCP] Failed to create server");return false;
     }
     
     // Set up callbacks
@@ -36,7 +35,7 @@ bool TCPDataServer::begin(uint16_t port) {
     _server->begin();
     _running = true;
     
-    Logger::log(LogLevel::INFO, "TCP", "Server started on port " + String(_port));
+    Logger::getInstance().info("[TCP] Server started on port %u", _port);
     return true;
 }
 
@@ -62,8 +61,7 @@ void TCPDataServer::stop() {
     }
     
     _running = false;
-    Logger::log(LogLevel::INFO, "TCP", "Server stopped");
-}
+    Logger::getInstance().info("[TCP] Server stopped");}
 
 void TCPDataServer::handle() {
     if (!_running) {
@@ -82,12 +80,12 @@ void TCPDataServer::onConnect(void* arg, AsyncClient* client) {
     TCPDataServer* server = static_cast<TCPDataServer*>(arg);
     
     if (server->_clientCount >= MAX_CLIENTS) {
-        Logger::log(LogLevel::WARN, "TCP", "Max clients reached, rejecting connection");
-        client->close(true);
+        Logger::getInstance().warn("[TCP] Max clients reached, rejecting connection");client->close(true);
         return;
     }
     
-    Logger::log(LogLevel::INFO, "TCP", "Client connected: " + client->remoteIP().toString());
+    String ip = client->remoteIP().toString();
+    Logger::getInstance().info("[TCP] Client connected: %s", ip.c_str());
     
     server->addClient(client);
     
@@ -111,7 +109,8 @@ void TCPDataServer::onConnect(void* arg, AsyncClient* client) {
 
 void TCPDataServer::onDisconnect(void* arg, AsyncClient* client) {
     TCPDataServer* server = static_cast<TCPDataServer*>(arg);
-    Logger::log(LogLevel::INFO, "TCP", "Client disconnected: " + client->remoteIP().toString());
+    String ip = client->remoteIP().toString();
+    Logger::getInstance().info("[TCP] Client disconnected: %s", ip.c_str());
     server->removeClient(client);
 }
 
@@ -143,12 +142,11 @@ void TCPDataServer::onData(void* arg, AsyncClient* client, void* data, size_t le
 }
 
 void TCPDataServer::onError(void* arg, AsyncClient* client, int8_t error) {
-    Logger::log(LogLevel::ERROR, "TCP", "Client error: " + String(error));
+    Logger::getInstance().error("[TCP] Client error: %d", (int)error);
 }
 
 void TCPDataServer::onTimeout(void* arg, AsyncClient* client, uint32_t time) {
-    Logger::log(LogLevel::WARN, "TCP", "Client timeout");
-    client->close(true);
+    Logger::getInstance().warn("[TCP] Client timeout");client->close(true);
 }
 
 void TCPDataServer::processCommand(ClientState* state, const char* command) {
@@ -160,7 +158,7 @@ void TCPDataServer::processCommand(ClientState* state, const char* command) {
         return;
     }
     
-    Logger::log(LogLevel::DEBUG, "TCP", "Command: " + cmd);
+    Logger::getInstance().debug("[TCP] Command: %s", cmd);
     
     if (cmd == "data" || cmd == "getreadings") {
         sendMeterData(state->client);
@@ -234,9 +232,9 @@ void TCPDataServer::sendHelp(AsyncClient* client) {
 String TCPDataServer::buildV1MeterData() {
     String output = "";
     
-    MeterData data;
-    if (!EnergyMeter::getInstance().getMeterData(data)) {
-        return "ERROR: No meter data available\r\n";
+    MeterData data = EnergyMeter::getInstance().getSnapshot();
+    if (!data.valid) {
+        return "ERROR: No meter data available";
     }
     
     // Phase A Energy
@@ -329,8 +327,7 @@ String TCPDataServer::buildV1MeterData() {
 String TCPDataServer::buildV1SystemInfo() {
     String output = "SYSTEM:\r\n";
     
-    SystemStatus status;
-    EnergyMeter::getInstance().getSystemStatus(status);
+    SystemStatus status = SystemMonitor::getInstance().getSystemStatus();
     
     output += "Uptime:" + String(status.uptime) + "\r\n";
     output += "FreeHeap:" + String(status.freeHeap) + "\r\n";
@@ -383,8 +380,7 @@ void TCPDataServer::cleanupInactiveClients() {
     for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
         if (_clients[i].client) {
             if (now - _clients[i].lastActivityTime > CLIENT_TIMEOUT_MS) {
-                Logger::log(LogLevel::INFO, "TCP", "Disconnecting inactive client");
-                _clients[i].client->close(true);
+                Logger::getInstance().info("[TCP] Disconnecting inactive client");_clients[i].client->close(true);
                 _clients[i].client = nullptr;
                 if (_clientCount > 0) {
                     _clientCount--;

@@ -46,6 +46,19 @@ public:
     bool hasMQTTConfig();
     bool hasNetworkConfig();
     bool hasSystemConfig();
+
+    // Compatibility helpers for ProtocolV2 naming
+    bool getWiFiConfig(WiFiConfig& config) { return loadWiFiConfig(config); }
+    bool setWiFiConfig(const WiFiConfig& config) { return saveWiFiConfig(config); }
+    bool getModbusConfig(ModbusConfig& config) { return loadModbusConfig(config); }
+    bool setModbusConfig(const ModbusConfig& config) { return saveModbusConfig(config); }
+    bool getMQTTConfig(MQTTConfig& config) { return loadMQTTConfig(config); }
+    bool setMQTTConfig(const MQTTConfig& config) { return saveMQTTConfig(config); }
+    bool getNetworkConfig(NetworkConfig& config) { return loadNetworkConfig(config); }
+    bool setNetworkConfig(const NetworkConfig& config) { return saveNetworkConfig(config); }
+    bool getSystemConfig(SystemConfig& config) { return loadSystemConfig(config); }
+    bool setSystemConfig(const SystemConfig& config) { return saveSystemConfig(config); }
+
     
 private:
     ConfigManager();

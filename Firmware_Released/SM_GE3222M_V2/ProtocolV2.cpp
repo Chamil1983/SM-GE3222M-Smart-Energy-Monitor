@@ -1,6 +1,7 @@
 #include "ProtocolV2.h"
 #include "Logger.h"
 #include "EnergyMeter.h"
+#include "SystemMonitor.h"
 #include "ConfigManager.h"
 #include "CalibrationManager.h"
 #include "DataLogger.h"
@@ -13,12 +14,12 @@ bool ProtocolV2::parseRequest(const String& json, String& command, JsonDocument&
     
     DeserializationError error = deserializeJson(doc, json);
     if (error) {
-        Logger::log(LogLevel::ERROR, "ProtocolV2", "JSON parse error: " + String(error.c_str()));
+        Logger::getInstance().error("ProtocolV2 JSON parse error: %s", error.c_str());
         return false;
     }
     
     if (!doc.containsKey("cmd")) {
-        Logger::log(LogLevel::ERROR, "ProtocolV2", "Missing 'cmd' field");
+        Logger::getInstance().error("ProtocolV2 Missing 'cmd' field");
         return false;
     }
     
@@ -83,7 +84,7 @@ String ProtocolV2::buildResponse(ResponseStatus status, const JsonDocument& data
 }
 
 String ProtocolV2::handleCommand(const String& command, const JsonDocument& params) {
-    Logger::log(LogLevel::DEBUG, "ProtocolV2", "Command: " + command);
+    Logger::getInstance().debug("ProtocolV2 Command: %s", command.c_str());
     
     if (command == "getMeterData") {
         return handleGetMeterData(params);
@@ -109,24 +110,20 @@ String ProtocolV2::handleCommand(const String& command, const JsonDocument& para
 }
 
 String ProtocolV2::handleGetMeterData(const JsonDocument& params) {
-    MeterData data;
-    if (!EnergyMeter::getInstance().getMeterData(data)) {
+    // Trigger an update to get the latest readings, then return snapshot
+    if (!EnergyMeter::getInstance().update()) {
         return buildResponse(ResponseStatus::ERROR, "Failed to read meter data");
     }
-    
+    MeterData data = EnergyMeter::getInstance().getSnapshot();
     DynamicJsonDocument doc(JSON_DOC_SIZE);
     meterDataToJson(data, doc);
-    
     return buildResponse(ResponseStatus::OK, doc);
 }
 
 String ProtocolV2::handleGetSystemStatus(const JsonDocument& params) {
-    SystemStatus status;
-    EnergyMeter::getInstance().getSystemStatus(status);
-    
+    SystemStatus status = SystemMonitor::getInstance().getSystemStatus();
     DynamicJsonDocument doc(JSON_DOC_SIZE);
     systemStatusToJson(status, doc);
-    
     return buildResponse(ResponseStatus::OK, doc);
 }
 
@@ -184,7 +181,7 @@ String ProtocolV2::handleSetCalibration(const JsonDocument& params) {
     }
     
     CalibrationConfig cal;
-    const JsonObject& calObj = params["calibration"];
+    JsonObjectConst calObj = params["calibration"].as<JsonObjectConst>();
     
     if (calObj.containsKey("lineFreq")) {
         cal.lineFreq = calObj["lineFreq"];
@@ -194,7 +191,7 @@ String ProtocolV2::handleSetCalibration(const JsonDocument& params) {
     }
     
     if (calObj.containsKey("calRegs")) {
-        JsonArray arr = calObj["calRegs"];
+        JsonArrayConst arr = calObj["calRegs"].as<JsonArrayConst>();
         for (int i = 0; i < 13 && i < arr.size(); i++) {
             cal.calRegs[i] = arr[i];
         }
@@ -378,7 +375,7 @@ bool ProtocolV2::jsonToConfig(const JsonDocument& doc) {
     if (doc.containsKey("system")) {
         SystemConfig sysCfg;
         if (cfg.getSystemConfig(sysCfg)) {
-            const JsonObject& sys = doc["system"];
+            JsonObjectConst sys = doc["system"].as<JsonObjectConst>();
             if (sys.containsKey("readInterval")) sysCfg.readInterval = sys["readInterval"];
             if (sys.containsKey("publishInterval")) sysCfg.publishInterval = sys["publishInterval"];
             if (sys.containsKey("webServerEnabled")) sysCfg.webServerEnabled = sys["webServerEnabled"];
@@ -393,7 +390,7 @@ bool ProtocolV2::jsonToConfig(const JsonDocument& doc) {
     if (doc.containsKey("wifi")) {
         WiFiConfig wifiCfg;
         if (cfg.getWiFiConfig(wifiCfg)) {
-            const JsonObject& wifi = doc["wifi"];
+            JsonObjectConst wifi = doc["wifi"].as<JsonObjectConst>();
             if (wifi.containsKey("enabled")) wifiCfg.enabled = wifi["enabled"];
             if (wifi.containsKey("ssid")) strncpy(wifiCfg.ssid, wifi["ssid"], sizeof(wifiCfg.ssid));
             if (wifi.containsKey("password")) strncpy(wifiCfg.password, wifi["password"], sizeof(wifiCfg.password));
@@ -406,7 +403,7 @@ bool ProtocolV2::jsonToConfig(const JsonDocument& doc) {
     if (doc.containsKey("mqtt")) {
         MQTTConfig mqttCfg;
         if (cfg.getMQTTConfig(mqttCfg)) {
-            const JsonObject& mqtt = doc["mqtt"];
+            JsonObjectConst mqtt = doc["mqtt"].as<JsonObjectConst>();
             if (mqtt.containsKey("enabled")) mqttCfg.enabled = mqtt["enabled"];
             if (mqtt.containsKey("broker")) strncpy(mqttCfg.broker, mqtt["broker"], sizeof(mqttCfg.broker));
             if (mqtt.containsKey("port")) mqttCfg.port = mqtt["port"];

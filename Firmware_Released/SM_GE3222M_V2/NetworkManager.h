@@ -13,9 +13,12 @@
 #include <DNSServer.h>
 #include "DataTypes.h"
 
-class NetworkManager {
+// NOTE: ESP32 Arduino core also defines a global `NetworkManager` class.
+// To avoid a symbol collision (and a hard compile error), our project-specific
+// WiFi manager is named `SMNetworkManager`.
+class SMNetworkManager {
 public:
-    static NetworkManager& getInstance();
+    static SMNetworkManager& getInstance();
     
     bool init(const WiFiConfig& config);
     bool startSTA();
@@ -32,10 +35,10 @@ public:
     void setAutoReconnect(bool enable);
     
 private:
-    NetworkManager();
-    ~NetworkManager();
-    NetworkManager(const NetworkManager&) = delete;
-    NetworkManager& operator=(const NetworkManager&) = delete;
+    SMNetworkManager();
+    ~SMNetworkManager();
+    SMNetworkManager(const SMNetworkManager&) = delete;
+    SMNetworkManager& operator=(const SMNetworkManager&) = delete;
     
     static void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
     

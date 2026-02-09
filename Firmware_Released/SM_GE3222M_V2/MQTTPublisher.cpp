@@ -4,6 +4,7 @@
  */
 
 #include "MQTTPublisher.h"
+#include <algorithm>
 #include <ArduinoJson.h>
 
 MQTTPublisher& MQTTPublisher::getInstance() {
@@ -105,8 +106,8 @@ void MQTTPublisher::reconnect() {
             publishHomeAssistantDiscovery();
         }
     } else {
-        _reconnectDelay = min(_reconnectDelay * RECONNECT_BACKOFF_MULTIPLIER, 
-                             MAX_RECONNECT_DELAY_MS);
+        _reconnectDelay = std::min<uint16_t>(static_cast<uint16_t>(_reconnectDelay * RECONNECT_BACKOFF_MULTIPLIER),
+                             static_cast<uint16_t>(MAX_RECONNECT_DELAY_MS));
         Logger::getInstance().warn("MQTTPublisher: Next reconnect in %d ms", _reconnectDelay);
     }
 }
@@ -291,7 +292,7 @@ void MQTTPublisher::publishDiscoverySensor(const char* sensorName, const char* d
     char buffer[768];
     size_t len = serializeJson(doc, buffer);
     
-    _mqttClient.publish(discoveryTopic.c_str(), buffer, len, true);
+    _mqttClient.publish(discoveryTopic.c_str(), reinterpret_cast<const uint8_t*>(buffer), len, true);
     
     delay(50);
 }
@@ -314,7 +315,7 @@ String MQTTPublisher::getDeviceId() const {
     return String(macStr);
 }
 
-bool MQTTPublisher::isConnected() const {
+bool MQTTPublisher::isConnected() {
     return _mqttClient.connected();
 }
 

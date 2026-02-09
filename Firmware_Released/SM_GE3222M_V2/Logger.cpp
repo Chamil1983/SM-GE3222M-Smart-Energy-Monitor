@@ -28,9 +28,9 @@ Logger& Logger::getInstance() {
     return instance;
 }
 
-void Logger::init(LogLevel level, bool serialEnabled, bool fileEnabled) {
+bool Logger::init(LogLevel level, bool serialEnabled, bool fileEnabled) {
     if (_initialized) {
-        return;
+        return true;
     }
     
     _minLevel = level;
@@ -42,7 +42,7 @@ void Logger::init(LogLevel level, bool serialEnabled, bool fileEnabled) {
         if (_serialEnabled) {
             Serial.println("[ERROR] Failed to create logger mutex");
         }
-        return;
+        return false;
     }
     
     _initialized = true;
@@ -50,6 +50,8 @@ void Logger::init(LogLevel level, bool serialEnabled, bool fileEnabled) {
     if (_serialEnabled) {
         Serial.println("[INFO] Logger initialized");
     }
+
+    return true;
 }
 
 void Logger::error(const char* format, ...) {

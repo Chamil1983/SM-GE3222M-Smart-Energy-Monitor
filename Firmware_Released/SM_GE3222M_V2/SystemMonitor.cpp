@@ -100,7 +100,7 @@ void SystemMonitor::updateCpuMetrics() {
 }
 
 void SystemMonitor::updateNetworkMetrics() {
-    NetworkManager& netMgr = NetworkManager::getInstance();
+    SMNetworkManager& netMgr = SMNetworkManager::getInstance();
     _status.wifiConnected = netMgr.isConnected();
     
     // MQTT status would be set externally by MQTTPublisher
@@ -181,7 +181,7 @@ uint32_t SystemMonitor::getUptime() const {
 }
 
 int SystemMonitor::getRSSI() const {
-    return NetworkManager::getInstance().getRSSI();
+    return SMNetworkManager::getInstance().getRSSI();
 }
 
 uint16_t SystemMonitor::getErrorCount() const {

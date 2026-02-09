@@ -1,6 +1,7 @@
 #include "WebServerManager.h"
 #include "Logger.h"
 #include "EnergyMeter.h"
+#include "SystemMonitor.h"
 #include "ConfigManager.h"
 #include "DataLogger.h"
 #include "ProtocolV2.h"
@@ -20,7 +21,7 @@ WebServerManager::~WebServerManager() {
 
 bool WebServerManager::begin(uint16_t port) {
     if (_running) {
-        Logger::log(LogLevel::WARN, "WebServer", "Server already running");
+        Logger::getInstance().warn("[WebServer] Server already running");
         return true;
     }
     
@@ -29,14 +30,14 @@ bool WebServerManager::begin(uint16_t port) {
     // Create server instance
     _server = new AsyncWebServer(_port);
     if (!_server) {
-        Logger::log(LogLevel::ERROR, "WebServer", "Failed to create server");
+        Logger::getInstance().error("[WebServer] Failed to create server");
         return false;
     }
     
     // Create WebSocket instance
     _ws = new AsyncWebSocket(WS_PATH);
     if (!_ws) {
-        Logger::log(LogLevel::ERROR, "WebServer", "Failed to create WebSocket");
+        Logger::getInstance().error("[WebServer] Failed to create WebSocket");
         delete _server;
         _server = nullptr;
         return false;
@@ -50,7 +51,7 @@ bool WebServerManager::begin(uint16_t port) {
     _server->begin();
     _running = true;
     
-    Logger::log(LogLevel::INFO, "WebServer", "Server started on port " + String(_port));
+    Logger::getInstance().info("[WebServer] Server started on port %u", (unsigned)_port);
     return true;
 }
 
@@ -72,7 +73,7 @@ void WebServerManager::stop() {
     }
     
     _running = false;
-    Logger::log(LogLevel::INFO, "WebServer", "Server stopped");
+    Logger::getInstance().info("[WebServer] Server stopped");
 }
 
 void WebServerManager::setupWebSocket() {
@@ -223,15 +224,17 @@ void WebServerManager::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* c
     
     switch (type) {
         case WS_EVT_CONNECT:
-            Logger::log(LogLevel::INFO, "WebSocket", "Client #" + String(client->id()) + 
-                       " connected from " + client->remoteIP().toString());
-            // Send initial data to newly connected client
+            {
+            String ip = client->remoteIP().toString();
+            Logger::getInstance().info("[WebSocket] Client #%u connected from %s", (unsigned)client->id(), ip.c_str());
+// Send initial data to newly connected client
             instance->broadcastMeterData();
-            break;
+        }
+        break;
             
         case WS_EVT_DISCONNECT:
-            Logger::log(LogLevel::INFO, "WebSocket", "Client #" + String(client->id()) + " disconnected");
-            break;
+            Logger::getInstance().info("[WebSocket] Client #%u disconnected", (unsigned)client->id());
+break;
             
         case WS_EVT_DATA: {
             AwsFrameInfo* info = (AwsFrameInfo*)arg;
@@ -250,9 +253,8 @@ void WebServerManager::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* c
 }
 
 void WebServerManager::handleWsMessage(AsyncWebSocketClient* client, const String& message) {
-    Logger::log(LogLevel::DEBUG, "WebSocket", "Message: " + message);
-    
-    // Try to parse as JSON command
+    Logger::getInstance().debug("[WebSocket] Message: %s", message.c_str());
+// Try to parse as JSON command
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, message);
     
@@ -331,23 +333,22 @@ size_t WebServerManager::getClientCount() const {
 }
 
 String WebServerManager::getMeterDataJson() {
-    MeterData data;
-    if (!EnergyMeter::getInstance().getMeterData(data)) {
-        return "{\"status\":\"error\",\"message\":\"Failed to read meter data\"}";
+    MeterData data = EnergyMeter::getInstance().getSnapshot();
+    if (!data.valid) {
+        return "{\"status\":\"error\",\"message\":\"Meter data not ready\"}";
     }
-    
+
     DynamicJsonDocument doc(4096);
     ProtocolV2::getInstance().meterDataToJson(data, doc);
-    
+
     String output;
     serializeJson(doc, output);
     return output;
 }
 
+
 String WebServerManager::getSystemStatusJson() {
-    SystemStatus status;
-    EnergyMeter::getInstance().getSystemStatus(status);
-    
+    SystemStatus status = SystemMonitor::getInstance().getSystemStatus();
     DynamicJsonDocument doc(2048);
     ProtocolV2::getInstance().systemStatusToJson(status, doc);
     

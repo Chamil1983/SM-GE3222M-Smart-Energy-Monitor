@@ -20,6 +20,12 @@
 #include <DHT.h>
 #include <ESPmDNS.h>
 
+// Some ESP32 board definitions (e.g. some Visual Micro setups) may not define LED_BUILTIN.
+// GPIO2 is the usual on-board LED for ESP32 Dev Module.
+#ifndef LED_BUILTIN
+#define LED_BUILTIN 2
+#endif
+
 // Include files (flat structure for Arduino IDE)
 #include "PinMap.h"
 #include "Version.h"
@@ -95,6 +101,11 @@ void printBootStep(const char* step, bool success = true) {
     }
 }
 
+// Backward-compatible helper used throughout this sketch.
+inline void checkBootStep(const char* step, bool success = true) {
+    printBootStep(step, success);
+}
+
 /**
  * Check boot status and halt if failed
  */
@@ -141,7 +152,7 @@ bool initPhase1_HAL() {
     if (!GPIOManager::getInstance().init()) {
         return checkBootStatus("GPIO Manager Init", false);
     }
-    GPIOManager::getInstance().setLED(MCP_PORTA_RUN_LED, LED_ON);
+    GPIOManager::getInstance().setLED(LED::RUN, true);
     checkBootStep("GPIO Manager Init", true);
     
     // Initialize SPI Bus
@@ -279,18 +290,18 @@ bool initPhase4_Network() {
     // Initialize Network Manager
     WiFiConfig wifiConfig;
     ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
-    if (!NetworkManager::getInstance().init(wifiConfig)) {
+    if (!SMNetworkManager::getInstance().init(wifiConfig)) {
         Serial.println("  WARNING: WiFi init failed, continuing...");
     }
     checkBootStep("Network Manager Init", true);
     
     // Connect to WiFi (non-blocking)
     if (wifiConfig.apMode) {
-        NetworkManager::getInstance().startAP(wifiConfig.apSSID, wifiConfig.apPassword);
-        Serial.printf("  AP Mode: %s (IP will be assigned)\n", wifiConfig.apSSID.c_str());
+        SMNetworkManager::getInstance().startAP(wifiConfig.apSSID, wifiConfig.apPassword);
+        Serial.printf("  AP Mode: %s (IP will be assigned)\n", wifiConfig.apSSID);
     } else {
-        NetworkManager::getInstance().startSTA();
-        Serial.printf("  STA Mode: Connecting to %s...\n", wifiConfig.ssid.c_str());
+        SMNetworkManager::getInstance().startSTA();
+        Serial.printf("  STA Mode: Connecting to %s...\n", wifiConfig.ssid);
     }
     checkBootStep("WiFi Started", true);
     
@@ -298,9 +309,8 @@ bool initPhase4_Network() {
     NetworkConfig netConfig;
     ConfigManager::getInstance().loadNetworkConfig(netConfig);
     if (netConfig.mdnsEnabled) {
-        SystemConfig sysConfig;
-        ConfigManager::getInstance().loadSystemConfig(sysConfig);
-        if (MDNS.begin(sysConfig.deviceName.c_str())) {
+        // Use WiFi hostname as the mDNS hostname.
+        if (MDNS.begin(wifiConfig.hostname)) {
             MDNS.addService("http", "tcp", 80);
             MDNS.addService("modbus", "tcp", 502);
             checkBootStep("mDNS Started", true);
@@ -364,10 +374,17 @@ bool initPhase5_Communications() {
     // Initialize OTA Manager
     SystemConfig sysConfig;
     ConfigManager::getInstance().loadSystemConfig(sysConfig);
-    if (!OTAManager::getInstance().begin(sysConfig.deviceName, "admin")) {
-        Serial.println("  WARNING: OTA init failed");
+    if (sysConfig.otaEnabled) {
+        // Hostname comes from WiFiConfig; password from SystemConfig.
+        WiFiConfig wifiConfig;
+        ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
+        if (!OTAManager::getInstance().begin(wifiConfig.hostname, sysConfig.otaPassword)) {
+            Serial.println("  WARNING: OTA init failed");
+        }
+        checkBootStep("OTA Manager", true);
+    } else {
+        checkBootStep("OTA Manager (disabled)", true);
     }
-    checkBootStep("OTA Manager", true);
     
     return true;
 }
@@ -447,8 +464,8 @@ void setup() {
     Serial.println();
     
     // Set system LED to running state
-    GPIOManager::getInstance().setLED(MCP_PORTA_RUN_LED, LED_ON);
-    GPIOManager::getInstance().setLED(MCP_PORTA_FLT_LED, LED_OFF);
+    GPIOManager::getInstance().setLED(LED::RUN, true);
+    GPIOManager::getInstance().setLED(LED::FAULT, false);
     digitalWrite(LED_BUILTIN, LOW);
     
     g_bootComplete = true;
@@ -465,7 +482,7 @@ void loop() {
     OTAManager::getInstance().handle();
     
     // Handle network manager (reconnection logic)
-    NetworkManager::getInstance().handle();
+    SMNetworkManager::getInstance().handle();
     
     // Feed watchdog
     WatchdogManager::getInstance().feed();

@@ -6,13 +6,14 @@
 #include "NetworkManager.h"
 #include "Logger.h"
 #include <esp_wifi.h>
+#include <algorithm>
 
-NetworkManager& NetworkManager::getInstance() {
-    static NetworkManager instance;
+SMNetworkManager& SMNetworkManager::getInstance() {
+    static SMNetworkManager instance;
     return instance;
 }
 
-NetworkManager::NetworkManager() 
+SMNetworkManager::SMNetworkManager() 
     : _initialized(false)
     , _autoReconnect(true)
     , _isSTAMode(false)
@@ -23,11 +24,11 @@ NetworkManager::NetworkManager()
     , _dnsServerRunning(false) {
 }
 
-NetworkManager::~NetworkManager() {
+SMNetworkManager::~SMNetworkManager() {
     stop();
 }
 
-bool NetworkManager::init(const WiFiConfig& config) {
+bool SMNetworkManager::init(const WiFiConfig& config) {
     Logger& logger = Logger::getInstance();
     
     if (_initialized) {
@@ -49,7 +50,7 @@ bool NetworkManager::init(const WiFiConfig& config) {
     String hostname = String(_config.hostname);
     if (hostname.isEmpty()) {
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        esp_wifi_get_mac(WIFI_IF_STA, mac);
         hostname = "GE3222M-" + String(mac[4], HEX) + String(mac[5], HEX);
     }
     WiFi.setHostname(hostname.c_str());
@@ -60,7 +61,7 @@ bool NetworkManager::init(const WiFiConfig& config) {
     return true;
 }
 
-bool NetworkManager::startSTA() {
+bool SMNetworkManager::startSTA() {
     Logger& logger = Logger::getInstance();
     
     if (!_initialized) {
@@ -96,7 +97,7 @@ bool NetworkManager::startSTA() {
     return true;
 }
 
-bool NetworkManager::startAP(const char* ssid, const char* password) {
+bool SMNetworkManager::startAP(const char* ssid, const char* password) {
     Logger& logger = Logger::getInstance();
     
     if (!_initialized) {
@@ -113,7 +114,7 @@ bool NetworkManager::startAP(const char* ssid, const char* password) {
     
     if (apSSID.isEmpty()) {
         uint8_t mac[6];
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        esp_wifi_get_mac(WIFI_IF_STA, mac);
         apSSID = "GE3222M-" + String(mac[4], HEX) + String(mac[5], HEX);
     }
     
@@ -146,7 +147,7 @@ bool NetworkManager::startAP(const char* ssid, const char* password) {
     return result;
 }
 
-void NetworkManager::stop() {
+void SMNetworkManager::stop() {
     Logger& logger = Logger::getInstance();
     
     if (_dnsServerRunning) {
@@ -170,11 +171,11 @@ void NetworkManager::stop() {
     _isAPMode = false;
 }
 
-bool NetworkManager::isConnected() const {
+bool SMNetworkManager::isConnected() const {
     return _isSTAMode && WiFi.isConnected();
 }
 
-String NetworkManager::getLocalIP() const {
+String SMNetworkManager::getLocalIP() const {
     if (_isSTAMode) {
         return WiFi.localIP().toString();
     } else if (_isAPMode) {
@@ -183,23 +184,23 @@ String NetworkManager::getLocalIP() const {
     return "0.0.0.0";
 }
 
-int NetworkManager::getRSSI() const {
+int SMNetworkManager::getRSSI() const {
     if (isConnected()) {
         return WiFi.RSSI();
     }
     return -100;
 }
 
-String NetworkManager::getMACAddress() const {
+String SMNetworkManager::getMACAddress() const {
     uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
     char macStr[18];
     snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return String(macStr);
 }
 
-String NetworkManager::getSSID() const {
+String SMNetworkManager::getSSID() const {
     if (_isSTAMode) {
         return WiFi.SSID();
     } else if (_isAPMode) {
@@ -208,7 +209,7 @@ String NetworkManager::getSSID() const {
     return "";
 }
 
-void NetworkManager::handle() {
+void SMNetworkManager::handle() {
     if (_dnsServerRunning) {
         _dnsServer.processNextRequest();
     }
@@ -218,14 +219,14 @@ void NetworkManager::handle() {
     }
 }
 
-void NetworkManager::setAutoReconnect(bool enable) {
+void SMNetworkManager::setAutoReconnect(bool enable) {
     _autoReconnect = enable;
     if (_isSTAMode) {
         WiFi.setAutoReconnect(enable);
     }
 }
 
-bool NetworkManager::applyStaticConfig() {
+bool SMNetworkManager::applyStaticConfig() {
     IPAddress ip(_config.staticIP[0], _config.staticIP[1], 
                  _config.staticIP[2], _config.staticIP[3]);
     IPAddress gateway(_config.gateway[0], _config.gateway[1], 
@@ -248,7 +249,7 @@ bool NetworkManager::applyStaticConfig() {
     return WiFi.config(ip, gateway, subnet, dns1, dns2);
 }
 
-void NetworkManager::attemptReconnect() {
+void SMNetworkManager::attemptReconnect() {
     unsigned long now = millis();
     
     if (now - _lastReconnectAttempt < _reconnectDelay) {
@@ -265,7 +266,7 @@ void NetworkManager::attemptReconnect() {
         return;
     }
     
-    _reconnectDelay = min(_reconnectDelay * 2, MAX_RECONNECT_DELAY);
+    _reconnectDelay = std::min<uint16_t>(static_cast<uint16_t>(_reconnectDelay * 2), MAX_RECONNECT_DELAY);
     
     Logger::getInstance().info("NetworkManager: Reconnect attempt %d (delay: %dms)", 
                               _reconnectAttempts, _reconnectDelay);
@@ -273,7 +274,7 @@ void NetworkManager::attemptReconnect() {
     WiFi.reconnect();
 }
 
-String NetworkManager::getRSSIQuality(int rssi) const {
+String SMNetworkManager::getRSSIQuality(int rssi) const {
     if (rssi >= -30) return "Excellent";
     if (rssi >= -50) return "Very Good";
     if (rssi >= -60) return "Good";
@@ -282,9 +283,9 @@ String NetworkManager::getRSSIQuality(int rssi) const {
     return "Very Weak";
 }
 
-void NetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+void SMNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     Logger& logger = Logger::getInstance();
-    NetworkManager& nm = NetworkManager::getInstance();
+    SMNetworkManager& nm = SMNetworkManager::getInstance();
     
     switch (event) {
         case ARDUINO_EVENT_WIFI_READY:

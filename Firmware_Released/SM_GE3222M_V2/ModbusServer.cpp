@@ -46,34 +46,36 @@ bool ModbusServer::begin(const ModbusConfig& config) {
         _modbusRTU.begin(&Serial2, PIN_MODBUS_DE);
         _modbusRTU.setBaudrate(config.baudrate);
         _modbusRTU.slave(config.slaveID);
-        
-        _modbusRTU.onSetCoil([this](TRegister* reg, uint16_t val) -> uint16_t {
+
+        // Register callbacks for full address ranges (ModbusAPI expects: offset, callback, count)
+        _modbusRTU.onSetCoil(0, [this](TRegister* reg, uint16_t val) -> uint16_t {
             writeCoil(reg->address.address, val != 0);
             return val;
-        });
-        
-        _modbusRTU.onGetCoil([this](TRegister* reg, uint16_t val) -> uint16_t {
+        }, MB_COIL_COUNT);
+
+        _modbusRTU.onGetCoil(0, [this](TRegister* reg, uint16_t /*val*/) -> uint16_t {
             return readCoil(reg->address.address) ? 1 : 0;
-        });
-        
-        _modbusRTU.onGetHreg([this](TRegister* reg, uint16_t val) -> uint16_t {
+        }, MB_COIL_COUNT);
+
+        _modbusRTU.onGetHreg(0, [this](TRegister* reg, uint16_t /*val*/) -> uint16_t {
             return readHoldingRegister(reg->address.address);
-        });
-        
-        _modbusRTU.onSetHreg([this](TRegister* reg, uint16_t val) -> uint16_t {
+        }, MB_HOLDING_REG_COUNT);
+
+        _modbusRTU.onSetHreg(0, [this](TRegister* reg, uint16_t val) -> uint16_t {
             writeHoldingRegister(reg->address.address, val);
             return val;
-        });
-        
-        _modbusRTU.onGetIreg([this](TRegister* reg, uint16_t val) -> uint16_t {
+        }, MB_HOLDING_REG_COUNT);
+
+        _modbusRTU.onGetIreg(0, [this](TRegister* reg, uint16_t /*val*/) -> uint16_t {
             return readInputRegister(reg->address.address);
-        });
-        
-        _modbusRTU.onGetIsts([this](TRegister* reg, uint16_t val) -> uint16_t {
+        }, MB_INPUT_REG_COUNT);
+
+        _modbusRTU.onGetIsts(0, [this](TRegister* reg, uint16_t /*val*/) -> uint16_t {
             return readDiscreteInput(reg->address.address) ? 1 : 0;
-        });
-        
+        }, MB_DISCRETE_INPUT_COUNT);
+
         _rtuEnabled = true;
+
         Logger::getInstance().info("ModbusServer: RTU started on Serial2 (baud=%d)", config.baudrate);
     }
     

@@ -24,7 +24,7 @@ public:
     bool publish(const MeterData& data);
     bool publishHomeAssistantDiscovery();
     
-    bool isConnected() const;
+    bool isConnected();
     void disconnect();
     
 private:

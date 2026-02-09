@@ -15,7 +15,8 @@ class Logger {
 public:
     static Logger& getInstance();
     
-    void init(LogLevel level, bool serialEnabled, bool fileEnabled = false);
+    // Returns true on success (mutex created and logger ready)
+    bool init(LogLevel level, bool serialEnabled, bool fileEnabled = false);
     
     void error(const char* format, ...);
     void warn(const char* format, ...);

@@ -252,7 +252,7 @@ void TaskManager::accumulatorTaskFunc(void* param) {
         
         autoSaveCounter++;
         if (autoSaveCounter >= AUTO_SAVE_INTERVAL) {
-            accumulator.save();
+            accumulator.saveToNVS();
             autoSaveCounter = 0;
         }
         
@@ -332,7 +332,11 @@ void TaskManager::mqttTaskFunc(void* param) {
         mqtt.handle();
         
         if (mqtt.isConnected()) {
-            MQTTConfig mqttConfig = config.getMQTTConfig();
+            MQTTConfig mqttConfig;
+            if (!config.getMQTTConfig(mqttConfig)) {
+                Logger::getInstance().warn("MQTTTask: Failed to load MQTT config, using defaults");
+            }
+
             uint32_t interval = mqttConfig.publishInterval * 1000;
             
             static uint32_t lastPublish = 0;

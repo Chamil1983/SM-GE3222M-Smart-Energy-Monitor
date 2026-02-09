@@ -46,7 +46,7 @@ enum class ErrorCode : uint16_t {
     WIFI_TIMEOUT            = 41,
     WIFI_LOST_CONNECTION    = 42,
     NETWORK_INIT_FAILED     = 43,
-    MQTT_CONNECT_FAILED     = 44,
+    MQTT_ERR_CONNECT_FAILED     = 44,
     NTP_SYNC_FAILED         = 45,
     
     // Storage Errors (60-79)
@@ -357,8 +357,8 @@ enum class EventType : uint8_t {
     ERROR_OCCURRED,
     WIFI_CONNECTED,
     WIFI_DISCONNECTED,
-    MQTT_CONNECTED,
-    MQTT_DISCONNECTED,
+    MQTT_EVT_CONNECTED,
+    MQTT_EVT_DISCONNECTED,
     OTA_STARTED,
     OTA_COMPLETED,
     SYSTEM_REBOOT
