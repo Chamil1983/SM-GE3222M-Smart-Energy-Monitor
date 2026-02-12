@@ -35,6 +35,7 @@ private:
     
     bool _enabled;
     bool _initialized;
+    bool _ownsTwdt;
     uint32_t _timeoutSeconds;
     TaskHandle_t _mainTaskHandle;
 };

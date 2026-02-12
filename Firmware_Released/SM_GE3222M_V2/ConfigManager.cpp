@@ -7,6 +7,37 @@
 #include "Logger.h"
 #include <nvs_flash.h>
 
+// Preferences.begin() can fail on devices with corrupted NVS or unexpected partition state.
+// This helper attempts a single NVS repair (erase+init) and retries once.
+static bool beginPrefsSafe(Preferences& prefs, const char* ns, bool readOnly) {
+    if (prefs.begin(ns, readOnly)) {
+        return true;
+    }
+
+    Logger::getInstance().error("[NVS] Failed to open namespace '%s' (attempting NVS repair)", ns);
+
+    // Try NVS repair: erase and re-init
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK) {
+        Logger::getInstance().error("[NVS] nvs_flash_erase failed: %d", (int)err);
+        return false;
+    }
+    err = nvs_flash_init();
+    if (err != ESP_OK) {
+        Logger::getInstance().error("[NVS] nvs_flash_init after erase failed: %d", (int)err);
+        return false;
+    }
+
+    if (!prefs.begin(ns, readOnly)) {
+        Logger::getInstance().error("[NVS] Failed to open namespace '%s' after repair", ns);
+        return false;
+    }
+
+    Logger::getInstance().warn("[NVS] Namespace '%s' opened after repair (defaults will be used)", ns);
+    return true;
+}
+#include <nvs_flash.h>
+
 // NVS Namespace constants
 const char* ConfigManager::NVS_NAMESPACE_WIFI    = "wifi";
 const char* ConfigManager::NVS_NAMESPACE_MODBUS  = "modbus";
@@ -56,7 +87,7 @@ bool ConfigManager::init() {
 
 bool ConfigManager::loadWiFiConfig(WiFiConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_WIFI, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_WIFI, false)) {
         Logger::getInstance().error("Failed to open WiFi config namespace");
         return false;
     }
@@ -84,7 +115,7 @@ bool ConfigManager::loadWiFiConfig(WiFiConfig& config) {
 
 bool ConfigManager::saveWiFiConfig(const WiFiConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_WIFI, false)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_WIFI, false)) {
         Logger::getInstance().error("Failed to open WiFi config namespace for writing");
         return false;
     }
@@ -113,7 +144,7 @@ bool ConfigManager::saveWiFiConfig(const WiFiConfig& config) {
 
 bool ConfigManager::hasWiFiConfig() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_WIFI, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_WIFI, false)) {
         return false;
     }
     bool exists = prefs.isKey("ssid");
@@ -127,7 +158,7 @@ bool ConfigManager::hasWiFiConfig() {
 
 bool ConfigManager::loadModbusConfig(ModbusConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MODBUS, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MODBUS, false)) {
         Logger::getInstance().error("Failed to open Modbus config namespace");
         return false;
     }
@@ -147,7 +178,7 @@ bool ConfigManager::loadModbusConfig(ModbusConfig& config) {
 
 bool ConfigManager::saveModbusConfig(const ModbusConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MODBUS, false)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MODBUS, false)) {
         Logger::getInstance().error("Failed to open Modbus config namespace for writing");
         return false;
     }
@@ -168,7 +199,7 @@ bool ConfigManager::saveModbusConfig(const ModbusConfig& config) {
 
 bool ConfigManager::hasModbusConfig() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MODBUS, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MODBUS, false)) {
         return false;
     }
     bool exists = prefs.isKey("slaveID");
@@ -182,7 +213,7 @@ bool ConfigManager::hasModbusConfig() {
 
 bool ConfigManager::loadMQTTConfig(MQTTConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MQTT, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MQTT, false)) {
         Logger::getInstance().error("Failed to open MQTT config namespace");
         return false;
     }
@@ -205,7 +236,7 @@ bool ConfigManager::loadMQTTConfig(MQTTConfig& config) {
 
 bool ConfigManager::saveMQTTConfig(const MQTTConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MQTT, false)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MQTT, false)) {
         Logger::getInstance().error("Failed to open MQTT config namespace for writing");
         return false;
     }
@@ -229,7 +260,7 @@ bool ConfigManager::saveMQTTConfig(const MQTTConfig& config) {
 
 bool ConfigManager::hasMQTTConfig() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_MQTT, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_MQTT, false)) {
         return false;
     }
     bool exists = prefs.isKey("broker");
@@ -243,7 +274,7 @@ bool ConfigManager::hasMQTTConfig() {
 
 bool ConfigManager::loadNetworkConfig(NetworkConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_NETWORK, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_NETWORK, false)) {
         Logger::getInstance().error("Failed to open Network config namespace");
         return false;
     }
@@ -262,7 +293,7 @@ bool ConfigManager::loadNetworkConfig(NetworkConfig& config) {
 
 bool ConfigManager::saveNetworkConfig(const NetworkConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_NETWORK, false)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_NETWORK, false)) {
         Logger::getInstance().error("Failed to open Network config namespace for writing");
         return false;
     }
@@ -282,7 +313,7 @@ bool ConfigManager::saveNetworkConfig(const NetworkConfig& config) {
 
 bool ConfigManager::hasNetworkConfig() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_NETWORK, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_NETWORK, false)) {
         return false;
     }
     bool exists = prefs.isKey("hostname");
@@ -296,7 +327,7 @@ bool ConfigManager::hasNetworkConfig() {
 
 bool ConfigManager::loadSystemConfig(SystemConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_SYSTEM, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_SYSTEM, false)) {
         Logger::getInstance().error("Failed to open System config namespace");
         return false;
     }
@@ -318,7 +349,7 @@ bool ConfigManager::loadSystemConfig(SystemConfig& config) {
 
 bool ConfigManager::saveSystemConfig(const SystemConfig& config) {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_SYSTEM, false)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_SYSTEM, false)) {
         Logger::getInstance().error("Failed to open System config namespace for writing");
         return false;
     }
@@ -341,7 +372,7 @@ bool ConfigManager::saveSystemConfig(const SystemConfig& config) {
 
 bool ConfigManager::hasSystemConfig() {
     Preferences prefs;
-    if (!prefs.begin(NVS_NAMESPACE_SYSTEM, true)) {
+    if (!beginPrefsSafe(prefs, NVS_NAMESPACE_SYSTEM, false)) {
         return false;
     }
     bool exists = prefs.isKey("readInterval");
@@ -361,35 +392,35 @@ bool ConfigManager::factoryReset() {
     bool success = true;
     
     // Clear all namespaces
-    if (prefs.begin(NVS_NAMESPACE_WIFI, false)) {
+    if (beginPrefsSafe(prefs, NVS_NAMESPACE_WIFI, false)) {
         prefs.clear();
         prefs.end();
     } else {
         success = false;
     }
     
-    if (prefs.begin(NVS_NAMESPACE_MODBUS, false)) {
+    if (beginPrefsSafe(prefs, NVS_NAMESPACE_MODBUS, false)) {
         prefs.clear();
         prefs.end();
     } else {
         success = false;
     }
     
-    if (prefs.begin(NVS_NAMESPACE_MQTT, false)) {
+    if (beginPrefsSafe(prefs, NVS_NAMESPACE_MQTT, false)) {
         prefs.clear();
         prefs.end();
     } else {
         success = false;
     }
     
-    if (prefs.begin(NVS_NAMESPACE_NETWORK, false)) {
+    if (beginPrefsSafe(prefs, NVS_NAMESPACE_NETWORK, false)) {
         prefs.clear();
         prefs.end();
     } else {
         success = false;
     }
     
-    if (prefs.begin(NVS_NAMESPACE_SYSTEM, false)) {
+    if (beginPrefsSafe(prefs, NVS_NAMESPACE_SYSTEM, false)) {
         prefs.clear();
         prefs.end();
     } else {

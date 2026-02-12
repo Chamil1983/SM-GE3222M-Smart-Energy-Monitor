@@ -4,8 +4,8 @@ CalibrationManager::CalibrationManager() {
 }
 
 bool CalibrationManager::loadCalibration(CalibrationConfig& config) {
-    if (!m_preferences.begin(NVS_NAMESPACE, true)) {
-        Logger::getInstance().error("CalibrationManager", "Failed to open NVS namespace");
+    if (!m_preferences.begin(NVS_NAMESPACE, false)) {
+        Logger::getInstance().error("CalibrationManager: Failed to open NVS namespace");
         config = getDefaultCalibration();
         return false;
     }
@@ -13,7 +13,7 @@ bool CalibrationManager::loadCalibration(CalibrationConfig& config) {
     bool exists = m_preferences.isKey("lineFreq");
     
     if (!exists) {
-        Logger::getInstance().info("CalibrationManager", "No calibration found in NVS, using defaults");
+        Logger::getInstance().info("CalibrationManager: No calibration found in NVS, using defaults");
         m_preferences.end();
         config = getDefaultCalibration();
         return false;
@@ -32,28 +32,28 @@ bool CalibrationManager::loadCalibration(CalibrationConfig& config) {
     
     size_t len = m_preferences.getBytes("calRegs", config.calRegs, sizeof(config.calRegs));
     if (len != sizeof(config.calRegs)) {
-        Logger::getInstance().warn("CalibrationManager", "calRegs size mismatch");
+        Logger::getInstance().warn("CalibrationManager: calRegs size mismatch");
     }
     
     len = m_preferences.getBytes("harCalRegs", config.harCalRegs, sizeof(config.harCalRegs));
     if (len != sizeof(config.harCalRegs)) {
-        Logger::getInstance().warn("CalibrationManager", "harCalRegs size mismatch");
+        Logger::getInstance().warn("CalibrationManager: harCalRegs size mismatch");
     }
     
     len = m_preferences.getBytes("measCalRegs", config.measCalRegs, sizeof(config.measCalRegs));
     if (len != sizeof(config.measCalRegs)) {
-        Logger::getInstance().warn("CalibrationManager", "measCalRegs size mismatch");
+        Logger::getInstance().warn("CalibrationManager: measCalRegs size mismatch");
     }
     
     m_preferences.end();
     
-    Logger::getInstance().info("CalibrationManager", "Loaded calibration from NVS");
+    Logger::getInstance().info("CalibrationManager: Loaded calibration from NVS");
     return true;
 }
 
 bool CalibrationManager::saveCalibration(const CalibrationConfig& config) {
     if (!m_preferences.begin(NVS_NAMESPACE, false)) {
-        Logger::getInstance().error("CalibrationManager", "Failed to open NVS namespace for write");
+        Logger::getInstance().error("CalibrationManager: Failed to open NVS namespace for write");
         return false;
     }
 
@@ -74,7 +74,7 @@ bool CalibrationManager::saveCalibration(const CalibrationConfig& config) {
     
     m_preferences.end();
     
-    Logger::getInstance().info("CalibrationManager", "Saved calibration to NVS");
+    Logger::getInstance().info("CalibrationManager: Saved calibration to NVS");
     return true;
 }
 
@@ -82,8 +82,8 @@ CalibrationConfig CalibrationManager::getDefaultCalibration() {
     CalibrationConfig config;
     
     // V1.0 Factory Defaults
-    config.lineFreq = 389;  // 50Hz setting for ATM90E36
-    config.pgaGain = 0x0505010101;  // PGA Gain configuration
+    config.lineFreq = 389;  // MMODE0 value for 50Hz (0x0185)
+    config.pgaGain = 0x0101;  // PGA Gain configuration (factory default)
     config.pmpga = 0;
     
     // Thresholds (V1.0 defaults)
@@ -126,7 +126,7 @@ CalibrationConfig CalibrationManager::getDefaultCalibration() {
         config.harCalRegs[i] = 0;
     }
     
-    Logger::getInstance().debug("CalibrationManager", "Generated factory default calibration");
+    Logger::getInstance().debug("CalibrationManager: Generated factory default calibration");
     
     return config;
 }

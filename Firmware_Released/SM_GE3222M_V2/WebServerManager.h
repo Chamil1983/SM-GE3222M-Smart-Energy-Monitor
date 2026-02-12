@@ -1,12 +1,24 @@
 #pragma once
 
 // SM-GE3222M V2.0 - Web Server Manager
-// Singleton web server with WebSocket support
-// Serves static files from SPIFFS and provides REST API
+// Socket-based HTTP server (ESP32 Arduino WebServer).
+//
+// NOTE: This build avoids ESPAsyncWebServer/AsyncTCP to prevent LWIP core-lock
+// asserts on some ESP32 Arduino 3.x toolchains.
+//
+// - Serves a minimal index page (or /data/index.html from SPIFFS if present)
+// - Provides REST API:
+//     GET  /api/status
+//     GET  /api/meter
+//     GET  /api/config
+//     POST /api/config   (JSON body)
+//     GET  /api/logs?count=50
+//
+// WebSocket streaming is disabled in this compatibility build.
+// The web UI can poll /api/meter once per second.
 
 #include <Arduino.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncWebSocket.h>
+#include <WebServer.h>
 #include "DataTypes.h"
 
 class WebServerManager {
@@ -15,69 +27,50 @@ public:
         static WebServerManager instance;
         return instance;
     }
-    
-    // Initialization
+
     bool begin(uint16_t port = 80);
     void stop();
-    
+
     // Processing (call from loop/task)
     void handle();
-    
-    // WebSocket broadcasting
-    void broadcastMeterData();
-    void broadcastSystemStatus();
-    void broadcastEvent(const String& event, const String& data);
-    
-    // Status
+
+    // Compatibility no-ops (WebSocket was removed)
+    void broadcastMeterData() {}
+    void broadcastSystemStatus() {}
+    void broadcastEvent(const String& /*event*/, const String& /*data*/) {}
+
     bool isRunning() const { return _running; }
     uint16_t getPort() const { return _port; }
-    size_t getClientCount() const;
-    
+    size_t getClientCount() const { return 0; } // no websocket clients
+
 private:
     WebServerManager();
     ~WebServerManager();
-    
-    // Prevent copying
+
     WebServerManager(const WebServerManager&) = delete;
     WebServerManager& operator=(const WebServerManager&) = delete;
-    
-    // Server setup
+
     void setupRoutes();
-    void setupWebSocket();
-    
-    // HTTP Route Handlers
-    void handleRoot(AsyncWebServerRequest* request);
-    void handleGetStatus(AsyncWebServerRequest* request);
-    void handleGetMeter(AsyncWebServerRequest* request);
-    void handleGetConfig(AsyncWebServerRequest* request);
-    void handlePostConfig(AsyncWebServerRequest* request, uint8_t* data, size_t len);
-    void handleGetLogs(AsyncWebServerRequest* request);
-    void handleNotFound(AsyncWebServerRequest* request);
-    
-    // WebSocket Handlers
-    static void onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, 
-                         AwsEventType type, void* arg, uint8_t* data, size_t len);
-    void handleWsMessage(AsyncWebSocketClient* client, const String& message);
-    
-    // Helper functions
+
+    // HTTP handlers
+    void handleRoot();
+    void handleGetStatus();
+    void handleGetMeter();
+    void handleGetConfig();
+    void handlePostConfig();
+    void handleGetLogs();
+    void handleNotFound();
+
+    // Helpers
     String getMeterDataJson();
     String getSystemStatusJson();
     String getConfigJson();
     String getLogsJson(int count = 50);
-    void addCORSHeaders(AsyncWebServerResponse* response);
-    
-    // Server instances
-    AsyncWebServer* _server;
-    AsyncWebSocket* _ws;
-    
-    // State
+
+    void addCORSHeaders();
+    bool streamFile(const char* path, const char* contentType);
+
+    WebServer* _server;
     bool _running;
     uint16_t _port;
-    
-    // Timing for auto-broadcast
-    uint32_t _lastBroadcastTime;
-    static const uint32_t BROADCAST_INTERVAL_MS = 1000;  // 1 second
-    
-    // WebSocket path
-    static const char* WS_PATH;
 };

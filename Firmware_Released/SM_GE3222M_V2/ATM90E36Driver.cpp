@@ -43,6 +43,10 @@ ATM90E36Driver::ATM90E36Driver()
 bool ATM90E36Driver::init(const CalibrationConfig& config) {
     Logger& logger = Logger::getInstance();
     logger.info("ATM90E36: Initializing...");
+
+    // Ensure CS line is configured (prevents 0xFFFF reads)
+    pinMode(PIN_SPI_CS_ATM90E36, OUTPUT);
+    digitalWrite(PIN_SPI_CS_ATM90E36, HIGH);
     
     m_calibration = config;
     
@@ -64,13 +68,21 @@ bool ATM90E36Driver::init(const CalibrationConfig& config) {
     
     delay(100);
     
-    // Verify checksums
+    // Verify checksums (non-fatal: allow SAFE MODE boot and later retry)
     if (!verifyChecksums()) {
         m_lastError = ErrorCode::ATM_CHECKSUM_FAILED;
-        logger.error("ATM90E36: Checksum verification failed");
-        return false;
+        logger.warn("ATM90E36: Checksum verification failed (continuing)");
+    } else {
+        logger.info("ATM90E36: Checksum verification OK");
     }
-    
+
+
+// Enable metering functions (required for valid RMS/power reads)
+// V1 firmware enables all features after config+calibration sections are latched.
+writeRegister(REG_FUNC_EN0, 0xFFFF);
+writeRegister(REG_FUNC_EN1, 0xFFFF);
+delay(10);
+
     m_initialized = true;
     logger.info("ATM90E36: Initialization complete");
     return true;
@@ -96,17 +108,6 @@ bool ATM90E36Driver::softReset() {
 bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
     Logger& logger = Logger::getInstance();
     logger.info("ATM90E36: Applying calibration");
-    
-    // Calculate frequency thresholds
-    uint16_t freqHiThresh, freqLoThresh;
-    if (config.lineFreq == 4485 || config.lineFreq == 5231) {  // 60Hz
-        freqHiThresh = 61 * 100;
-        freqLoThresh = 59 * 100;
-    } else {  // 50Hz
-        freqHiThresh = 51 * 100;
-        freqLoThresh = 49 * 100;
-    }
-    
     // Function enable registers
     writeRegister(REG_FUNC_EN0, 0x0000);
     writeRegister(REG_FUNC_EN1, 0x0000);
@@ -135,6 +136,9 @@ bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
     };
     m_csZero = calculateChecksum(csCalc, 11);
     writeRegister(REG_CS_ZERO, m_csZero);
+    // End config section (latch checksum)
+    writeRegister(REG_CONFIG_START, CONFIG_END_MAGIC);
+    delay(10);
     
     // *** PHASE 2: CALIBRATION REGISTERS (CalStart) ***
     logger.debug("ATM90E36: Writing power calibration registers");
@@ -155,6 +159,9 @@ bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
     // Calculate CS1
     m_csOne = calculateChecksum(config.calRegs, 12);
     writeRegister(REG_CS_ONE, m_csOne);
+    // End power calibration section
+    writeRegister(REG_CAL_START, CONFIG_END_MAGIC);
+    delay(10);
     
     // *** PHASE 3: HARMONIC REGISTERS (HarmStart) ***
     logger.debug("ATM90E36: Writing harmonic calibration registers");
@@ -169,6 +176,9 @@ bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
     // Calculate CS2
     m_csTwo = calculateChecksum(config.harCalRegs, 6);
     writeRegister(REG_CS_TWO, m_csTwo);
+    // End harmonic calibration section
+    writeRegister(REG_HARM_START, CONFIG_END_MAGIC);
+    delay(10);
     
     // *** PHASE 4: MEASUREMENT CALIBRATION REGISTERS (AdjStart) ***
     logger.debug("ATM90E36: Writing measurement calibration registers");
@@ -191,6 +201,9 @@ bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
     // Calculate CS3
     m_csThree = calculateChecksum(config.measCalRegs, 14);
     writeRegister(REG_CS_THREE, m_csThree);
+    // End measurement calibration section
+    writeRegister(REG_ADJ_START, CONFIG_END_MAGIC);
+    delay(10);
     
     logger.info("ATM90E36: Calibration complete");
     return true;
@@ -245,7 +258,20 @@ uint16_t ATM90E36Driver::readRegister(uint16_t address) {
         return 0xFFFF;
     }
     
-    return spi.readRegister(PIN_SPI_CS_ATM90E36, address);
+    uint16_t val = spi.readRegister(PIN_SPI_CS_ATM90E36, address);
+
+    // Guard against floating-bus reads (0xFFFF) which indicate CS/config/SPI issues.
+    if (val == 0xFFFF) {
+        m_lastError = ErrorCode::ATM_SPI_COMM_ERROR;
+        static uint32_t s_lastWarn = 0;
+        uint32_t now = millis();
+        if (now - s_lastWarn > 1000) {
+            Logger::getInstance().error("ATM90E36: SPI read returned 0xFFFF at reg 0x%04X", (unsigned)address);
+            s_lastWarn = now;
+        }
+    }
+
+    return val;
 }
 
 bool ATM90E36Driver::writeRegister(uint16_t address, uint16_t value) {

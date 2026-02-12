@@ -247,6 +247,7 @@ constexpr uint16_t REG_TEMPERATURE      = 0xE9;  // Internal Die Temperature
 // CALIBRATION CONSTANTS
 // ============================================================================
 constexpr uint16_t CAL_CONFIG_START     = 0x5678;  // Configuration start magic
+constexpr uint16_t CONFIG_END_MAGIC     = 0x8765;  // Configuration end magic (latch checksum)
 constexpr uint16_t CAL_CS_ZERO          = 0x4741;  // CS0 expected value
 
 // Default PLconstant for 50Hz, 1000 pulses/kWh

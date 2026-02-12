@@ -4,9 +4,13 @@
  */
 
 #include "DataLogger.h"
+#include <new>
 #include "Logger.h"
 #include "SPIFFSManager.h"
 #include <time.h>
+#include <esp_heap_caps.h>
+#include <esp_system.h>
+
 
 DataLogger& DataLogger::getInstance() {
     static DataLogger instance;
@@ -14,7 +18,7 @@ DataLogger& DataLogger::getInstance() {
 }
 
 DataLogger::DataLogger() 
-    : _initialized(false), _maxEntries(1000), _head(0), _count(0), _buffer(nullptr), _mutex(nullptr) {
+    : _initialized(false), _maxEntries(200), _head(0), _count(0), _buffer(nullptr), _mutex(nullptr) {
 }
 
 DataLogger::~DataLogger() {
@@ -36,10 +40,25 @@ bool DataLogger::init(size_t maxEntries) {
     _maxEntries = maxEntries;
     
     // Allocate ring buffer
-    _buffer = new (std::nothrow) LoggedReading[_maxEntries];
+    // Prefer PSRAM when available (large history buffers).
+    if (psramFound()) {
+        void* mem = heap_caps_malloc(sizeof(LoggedReading) * _maxEntries, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        _buffer = static_cast<LoggedReading*>(mem);
+        if (_buffer) {
+            // placement-new to run constructors (PhaseData/MeterData zeroing)
+            for (size_t i = 0; i < _maxEntries; ++i) {
+                new (&_buffer[i]) LoggedReading();
+            }
+            logger.info("DataLogger: Ring buffer allocated in PSRAM (%d entries)", _maxEntries);
+        }
+    }
     if (!_buffer) {
-        logger.error("Failed to allocate ring buffer for %d entries", _maxEntries);
-        return false;
+        _buffer = new (std::nothrow) LoggedReading[_maxEntries];
+        if (!_buffer) {
+            logger.error("Failed to allocate ring buffer for %d entries", _maxEntries);
+            return false;
+        }
+        logger.info("DataLogger: Ring buffer allocated in heap (%d entries)", _maxEntries);
     }
     
     // Create mutex

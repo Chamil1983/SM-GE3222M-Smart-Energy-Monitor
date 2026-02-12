@@ -1,4 +1,5 @@
 #include "EnergyAccumulator.h"
+#include <nvs_flash.h>
 
 EnergyAccumulator::EnergyAccumulator()
     : m_initialized(false)
@@ -11,7 +12,7 @@ EnergyAccumulator::EnergyAccumulator()
 
 bool EnergyAccumulator::init(uint32_t persistIntervalSec) {
     if (m_initialized) {
-        Logger::getInstance().warn("EnergyAccumulator", "Already initialized");
+        Logger::getInstance().warn("EnergyAccumulator: Already initialized");
         return true;
     }
 
@@ -19,7 +20,7 @@ bool EnergyAccumulator::init(uint32_t persistIntervalSec) {
     
     m_mutex = xSemaphoreCreateMutex();
     if (m_mutex == nullptr) {
-        Logger::getInstance().error("EnergyAccumulator", "Failed to create mutex");
+        Logger::getInstance().error("EnergyAccumulator: Failed to create mutex");
         return false;
     }
 
@@ -37,7 +38,7 @@ bool EnergyAccumulator::init(uint32_t persistIntervalSec) {
 
 void EnergyAccumulator::update(const MeterData& data) {
     if (!m_initialized) {
-        Logger::getInstance().error("EnergyAccumulator", "Not initialized");
+        Logger::getInstance().error("EnergyAccumulator: Not initialized");
         return;
     }
 
@@ -92,14 +93,14 @@ void EnergyAccumulator::update(const MeterData& data) {
 
 bool EnergyAccumulator::loadFromNVS() {
     if (!m_preferences.begin(NVS_NAMESPACE, true)) {
-        Logger::getInstance().error("EnergyAccumulator", "Failed to open NVS namespace");
+        Logger::getInstance().error("EnergyAccumulator: Failed to open NVS namespace");
         return false;
     }
 
     bool exists = m_preferences.isKey("phaseA_AEI");
     
     if (!exists) {
-        Logger::getInstance().info("EnergyAccumulator", "No saved energy data in NVS");
+        Logger::getInstance().info("EnergyAccumulator: No saved energy data in NVS");
         m_preferences.end();
         return false;
     }
@@ -128,7 +129,7 @@ bool EnergyAccumulator::loadFromNVS() {
     
     m_preferences.end();
     
-    Logger::getInstance().info("EnergyAccumulator", "Loaded energy data from NVS");
+    Logger::getInstance().info("EnergyAccumulator: Loaded energy data from NVS");
     Logger::getInstance().debug("EnergyAccumulator", "Total Import: " + 
                                String(m_energy.total.activeEnergyImport, 3) + " kWh");
     
@@ -137,7 +138,7 @@ bool EnergyAccumulator::loadFromNVS() {
 
 bool EnergyAccumulator::saveToNVS() {
     if (!m_preferences.begin(NVS_NAMESPACE, false)) {
-        Logger::getInstance().error("EnergyAccumulator", "Failed to open NVS namespace for write");
+        Logger::getInstance().error("EnergyAccumulator: Failed to open NVS namespace for write");
         return false;
     }
 
@@ -169,7 +170,7 @@ bool EnergyAccumulator::saveToNVS() {
     
     m_preferences.end();
     
-    Logger::getInstance().debug("EnergyAccumulator", "Saved energy data to NVS");
+    Logger::getInstance().debug("EnergyAccumulator: Saved energy data to NVS");
     
     return true;
 }
@@ -181,7 +182,7 @@ EnergyData EnergyAccumulator::getAccumulatedEnergy() {
         data = m_energy;
         xSemaphoreGive(m_mutex);
     } else {
-        Logger::getInstance().warn("EnergyAccumulator", "Mutex timeout in getAccumulatedEnergy");
+        Logger::getInstance().warn("EnergyAccumulator: Mutex timeout in getAccumulatedEnergy");
     }
     
     return data;
@@ -194,7 +195,7 @@ void EnergyAccumulator::reset() {
     }
     
     saveToNVS();
-    Logger::getInstance().info("EnergyAccumulator", "Reset all accumulated energy");
+    Logger::getInstance().info("EnergyAccumulator: Reset all accumulated energy");
 }
 
 void EnergyAccumulator::accumulatePhase(EnergyData::PhaseEnergy& energy, 

@@ -5,9 +5,12 @@
 #include "ConfigManager.h"
 #include <cstring>
 
-TCPDataServer::TCPDataServer() 
-    : _server(nullptr), _running(false), _port(8088), 
-      _clientCount(0), _lastPublishTime(0), _lastCleanupTime(0) {
+TCPDataServer::TCPDataServer()
+    : _server(nullptr),
+      _running(false),
+      _port(8088),
+      _clientCount(0),
+      _lastCleanupTime(0) {
 }
 
 TCPDataServer::~TCPDataServer() {
@@ -16,26 +19,32 @@ TCPDataServer::~TCPDataServer() {
 
 bool TCPDataServer::begin(uint16_t port) {
     if (_running) {
-        Logger::getInstance().warn("[TCP] Server already running");return true;
+        Logger::getInstance().warn("[TCP] Server already running");
+        return true;
     }
-    
+
     _port = port;
-    _server = new AsyncServer(_port);
-    
+
+    // Create server instance (socket based)
+    _server = new WiFiServer(_port);
     if (!_server) {
-        Logger::getInstance().error("[TCP] Failed to create server");return false;
+        Logger::getInstance().error("[TCP] Failed to create WiFiServer");
+        return false;
     }
-    
-    // Set up callbacks
-    _server->onClient([this](void* arg, AsyncClient* client) {
-        onConnect(this, client);
-    }, this);
-    
-    // Start server
+
     _server->begin();
+    _server->setNoDelay(true);
+
+    // Reset client slots
+    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+        _clients[i].reset();
+    }
+    _clientCount = 0;
+
     _running = true;
-    
-    Logger::getInstance().info("[TCP] Server started on port %u", _port);
+    _lastCleanupTime = millis();
+
+    Logger::getInstance().info("[TCP] Server started on port %u", (unsigned)_port);
     return true;
 }
 
@@ -43,32 +52,30 @@ void TCPDataServer::stop() {
     if (!_running) {
         return;
     }
-    
-    // Disconnect all clients
+
     for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-        if (_clients[i].client) {
-            _clients[i].client->close(true);
-            _clients[i].client = nullptr;
-        }
+        _clients[i].reset();
     }
     _clientCount = 0;
-    
-    // Stop server
+
     if (_server) {
-        _server->end();
+        _server->stop();
         delete _server;
         _server = nullptr;
     }
-    
+
     _running = false;
-    Logger::getInstance().info("[TCP] Server stopped");}
+    Logger::getInstance().info("[TCP] Server stopped");
+}
 
 void TCPDataServer::handle() {
-    if (!_running) {
+    if (!_running || !_server) {
         return;
     }
-    
-    // Cleanup inactive clients periodically
+
+    acceptNewClients();
+    pollClients();
+
     uint32_t now = millis();
     if (now - _lastCleanupTime > CLEANUP_INTERVAL_MS) {
         cleanupInactiveClients();
@@ -76,148 +83,159 @@ void TCPDataServer::handle() {
     }
 }
 
-void TCPDataServer::onConnect(void* arg, AsyncClient* client) {
-    TCPDataServer* server = static_cast<TCPDataServer*>(arg);
-    
-    if (server->_clientCount >= MAX_CLIENTS) {
-        Logger::getInstance().warn("[TCP] Max clients reached, rejecting connection");client->close(true);
-        return;
-    }
-    
-    String ip = client->remoteIP().toString();
-    Logger::getInstance().info("[TCP] Client connected: %s", ip.c_str());
-    
-    server->addClient(client);
-    
-    // Set up client callbacks
-    client->onDisconnect([server](void* arg, AsyncClient* c) {
-        onDisconnect(server, c);
-    }, server);
-    
-    client->onData([server](void* arg, AsyncClient* c, void* data, size_t len) {
-        onData(server, c, data, len);
-    }, server);
-    
-    client->onError([server](void* arg, AsyncClient* c, int8_t error) {
-        onError(server, c, error);
-    }, server);
-    
-    client->onTimeout([server](void* arg, AsyncClient* c, uint32_t time) {
-        onTimeout(server, c, time);
-    }, server);
-}
+void TCPDataServer::acceptNewClients() {
+    // Accept as many pending connections as possible (up to MAX_CLIENTS)
+    while (_server->hasClient()) {
+        WiFiClient newClient = _server->accept();
 
-void TCPDataServer::onDisconnect(void* arg, AsyncClient* client) {
-    TCPDataServer* server = static_cast<TCPDataServer*>(arg);
-    String ip = client->remoteIP().toString();
-    Logger::getInstance().info("[TCP] Client disconnected: %s", ip.c_str());
-    server->removeClient(client);
-}
+        if (!newClient) {
+            // Nothing valid
+            return;
+        }
 
-void TCPDataServer::onData(void* arg, AsyncClient* client, void* data, size_t len) {
-    TCPDataServer* server = static_cast<TCPDataServer*>(arg);
-    ClientState* state = server->findClientState(client);
-    
-    if (!state) {
-        return;
-    }
-    
-    state->lastActivityTime = millis();
-    
-    // Process incoming data
-    char* cmdData = static_cast<char*>(data);
-    for (size_t i = 0; i < len; i++) {
-        char c = cmdData[i];
-        
-        if (c == '\n' || c == '\r') {
-            if (state->rxBufferLen > 0) {
-                state->rxBuffer[state->rxBufferLen] = '\0';
-                server->processCommand(state, state->rxBuffer);
-                state->rxBufferLen = 0;
+        // Find free slot
+        int slot = -1;
+        for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+            if (!_clients[i].inUse) {
+                slot = i;
+                break;
             }
-        } else if (state->rxBufferLen < sizeof(state->rxBuffer) - 1) {
-            state->rxBuffer[state->rxBufferLen++] = c;
+        }
+
+        if (slot < 0) {
+            Logger::getInstance().warn("[TCP] Max clients reached, rejecting connection");
+            newClient.stop();
+            continue;
+        }
+
+        _clients[slot].client = newClient;
+        _clients[slot].inUse = true;
+        _clients[slot].lastActivityTime = millis();
+        _clients[slot].rxBufferLen = 0;
+        memset(_clients[slot].rxBuffer, 0, sizeof(_clients[slot].rxBuffer));
+
+        _clientCount++;
+
+        Logger::getInstance().info("[TCP] Client connected: %s", newClient.remoteIP().toString().c_str());
+        // greet
+        _clients[slot].client.print("SM-GE3222M V2.0 TCP Server\r\nType 'help' for commands.\r\n");
+    }
+}
+
+void TCPDataServer::pollClients() {
+    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+        if (!_clients[i].inUse) continue;
+
+        WiFiClient& c = _clients[i].client;
+
+        if (!c.connected()) {
+            _clients[i].reset();
+            if (_clientCount > 0) _clientCount--;
+            continue;
+        }
+
+        // Read available data
+        while (c.available()) {
+            int ch = c.read();
+            if (ch < 0) break;
+            char cch = (char)ch;
+
+            _clients[i].lastActivityTime = millis();
+
+            if (cch == '\n' || cch == '\r') {
+                if (_clients[i].rxBufferLen > 0) {
+                    _clients[i].rxBuffer[_clients[i].rxBufferLen] = '\0';
+                    processCommand(_clients[i], _clients[i].rxBuffer);
+                    _clients[i].rxBufferLen = 0;
+                }
+            } else {
+                if (_clients[i].rxBufferLen < sizeof(_clients[i].rxBuffer) - 1) {
+                    _clients[i].rxBuffer[_clients[i].rxBufferLen++] = cch;
+                }
+            }
         }
     }
 }
 
-void TCPDataServer::onError(void* arg, AsyncClient* client, int8_t error) {
-    Logger::getInstance().error("[TCP] Client error: %d", (int)error);
+void TCPDataServer::cleanupInactiveClients() {
+    uint32_t now = millis();
+    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
+        if (!_clients[i].inUse) continue;
+        if (!(_clients[i].client) || !_clients[i].client.connected()) {
+            _clients[i].reset();
+            if (_clientCount > 0) _clientCount--;
+            continue;
+        }
+        if ((now - _clients[i].lastActivityTime) > CLIENT_TIMEOUT_MS) {
+            Logger::getInstance().warn("[TCP] Client timeout -> disconnect");
+            _clients[i].reset();
+            if (_clientCount > 0) _clientCount--;
+        }
+    }
 }
 
-void TCPDataServer::onTimeout(void* arg, AsyncClient* client, uint32_t time) {
-    Logger::getInstance().warn("[TCP] Client timeout");client->close(true);
-}
-
-void TCPDataServer::processCommand(ClientState* state, const char* command) {
+void TCPDataServer::processCommand(ClientState& state, const char* command) {
     String cmd = String(command);
     cmd.trim();
     cmd.toLowerCase();
-    
+
     if (cmd.length() == 0) {
         return;
     }
-    
-    Logger::getInstance().debug("[TCP] Command: %s", cmd);
-    
+
+    Logger::getInstance().debug("[TCP] Command: %s", cmd.c_str());
+
     if (cmd == "data" || cmd == "getreadings") {
-        sendMeterData(state->client);
+        sendMeterData(state.client);
     } else if (cmd == "status" || cmd == "getmeterinfo") {
-        sendSystemStatus(state->client);
+        sendSystemStatus(state.client);
     } else if (cmd == "config" || cmd == "getconfig") {
-        sendConfig(state->client);
+        sendConfig(state.client);
     } else if (cmd == "help" || cmd == "?") {
-        sendHelp(state->client);
+        sendHelp(state.client);
     } else if (cmd == "reset") {
-        state->client->write("OK\r\n");
+        state.client.print("OK\r\n");
+        state.client.flush();
         delay(100);
         ESP.restart();
     } else {
-        state->client->write("ERROR: Unknown command\r\n");
+        state.client.print("ERROR: Unknown command\r\n");
     }
 }
 
-void TCPDataServer::sendMeterData(AsyncClient* client) {
-    if (!client || !client->connected()) {
-        return;
-    }
-    
+void TCPDataServer::sendMeterData(WiFiClient& client) {
+    if (!client || !client.connected()) return;
     String data = buildV1MeterData();
-    client->write(data.c_str(), data.length());
+    client.print(data);
 }
 
-void TCPDataServer::sendSystemStatus(AsyncClient* client) {
-    if (!client || !client->connected()) {
-        return;
-    }
-    
+void TCPDataServer::sendSystemStatus(WiFiClient& client) {
+    if (!client || !client.connected()) return;
     String data = buildV1SystemInfo();
-    client->write(data.c_str(), data.length());
+    client.print(data);
 }
 
-void TCPDataServer::sendConfig(AsyncClient* client) {
-    if (!client || !client->connected()) {
-        return;
-    }
-    
+void TCPDataServer::sendConfig(WiFiClient& client) {
+    if (!client || !client.connected()) return;
+
     String response = "CONFIG:\r\n";
-    
+
     SystemConfig sysCfg;
     if (ConfigManager::getInstance().getSystemConfig(sysCfg)) {
         response += "ReadInterval:" + String(sysCfg.readInterval) + "\r\n";
         response += "PublishInterval:" + String(sysCfg.publishInterval) + "\r\n";
         response += "WebPort:" + String(sysCfg.webServerPort) + "\r\n";
+    } else {
+        response += "ReadInterval:500\r\nPublishInterval:1000\r\nWebPort:80\r\n";
     }
-    
+
     response += "END\r\n";
-    client->write(response.c_str(), response.length());
+    client.print(response);
 }
 
-void TCPDataServer::sendHelp(AsyncClient* client) {
-    if (!client || !client->connected()) {
-        return;
-    }
-    
+void TCPDataServer::sendHelp(WiFiClient& client) {
+    if (!client || !client.connected()) return;
+
     String help = "SM-GE3222M V2.0 TCP Server\r\n";
     help += "Commands:\r\n";
     help += "  data       - Get meter readings (V1.0 format)\r\n";
@@ -225,9 +243,12 @@ void TCPDataServer::sendHelp(AsyncClient* client) {
     help += "  config     - Get configuration\r\n";
     help += "  reset      - Reset device\r\n";
     help += "  help       - This help message\r\n";
-    
-    client->write(help.c_str(), help.length());
+
+    client.print(help);
 }
+
+// The remaining V1.0 builders are unchanged from the previous Async implementation.
+
 
 String TCPDataServer::buildV1MeterData() {
     String output = "";
@@ -337,55 +358,4 @@ String TCPDataServer::buildV1SystemInfo() {
     output += "Errors:" + String(status.errorCount) + "\r\n";
     
     return output;
-}
-
-void TCPDataServer::addClient(AsyncClient* client) {
-    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-        if (!_clients[i].client) {
-            _clients[i].client = client;
-            _clients[i].lastActivityTime = millis();
-            _clients[i].rxBufferLen = 0;
-            _clients[i].authenticated = true;
-            _clientCount++;
-            return;
-        }
-    }
-}
-
-void TCPDataServer::removeClient(AsyncClient* client) {
-    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-        if (_clients[i].client == client) {
-            _clients[i].client = nullptr;
-            _clients[i].rxBufferLen = 0;
-            if (_clientCount > 0) {
-                _clientCount--;
-            }
-            return;
-        }
-    }
-}
-
-TCPDataServer::ClientState* TCPDataServer::findClientState(AsyncClient* client) {
-    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-        if (_clients[i].client == client) {
-            return &_clients[i];
-        }
-    }
-    return nullptr;
-}
-
-void TCPDataServer::cleanupInactiveClients() {
-    uint32_t now = millis();
-    
-    for (uint8_t i = 0; i < MAX_CLIENTS; i++) {
-        if (_clients[i].client) {
-            if (now - _clients[i].lastActivityTime > CLIENT_TIMEOUT_MS) {
-                Logger::getInstance().info("[TCP] Disconnecting inactive client");_clients[i].client->close(true);
-                _clients[i].client = nullptr;
-                if (_clientCount > 0) {
-                    _clientCount--;
-                }
-            }
-        }
-    }
 }

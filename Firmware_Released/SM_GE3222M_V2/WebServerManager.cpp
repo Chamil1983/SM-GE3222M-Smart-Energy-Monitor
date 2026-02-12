@@ -6,13 +6,11 @@
 #include "DataLogger.h"
 #include "ProtocolV2.h"
 #include "SPIFFSManager.h"
+#include "NetworkManager.h"
 #include <ArduinoJson.h>
 
-const char* WebServerManager::WS_PATH = "/ws";
-
-WebServerManager::WebServerManager() 
-    : _server(nullptr), _ws(nullptr), _running(false), 
-      _port(80), _lastBroadcastTime(0) {
+WebServerManager::WebServerManager()
+    : _server(nullptr), _running(false), _port(80) {
 }
 
 WebServerManager::~WebServerManager() {
@@ -24,365 +22,344 @@ bool WebServerManager::begin(uint16_t port) {
         Logger::getInstance().warn("[WebServer] Server already running");
         return true;
     }
-    
+
     _port = port;
-    
-    // Create server instance
-    _server = new AsyncWebServer(_port);
+
+    _server = new WebServer(_port);
     if (!_server) {
-        Logger::getInstance().error("[WebServer] Failed to create server");
+        Logger::getInstance().error("[WebServer] Failed to create WebServer");
         return false;
     }
-    
-    // Create WebSocket instance
-    _ws = new AsyncWebSocket(WS_PATH);
-    if (!_ws) {
-        Logger::getInstance().error("[WebServer] Failed to create WebSocket");
-        delete _server;
-        _server = nullptr;
-        return false;
-    }
-    
-    // Setup WebSocket and routes
-    setupWebSocket();
+
     setupRoutes();
-    
-    // Start server
     _server->begin();
     _running = true;
-    
+
     Logger::getInstance().info("[WebServer] Server started on port %u", (unsigned)_port);
+    Logger::getInstance().info("[WebServer] WebSocket disabled (poll /api/meter)");
     return true;
 }
 
 void WebServerManager::stop() {
-    if (!_running) {
-        return;
-    }
-    
-    if (_ws) {
-        _ws->closeAll();
-        delete _ws;
-        _ws = nullptr;
-    }
-    
+    if (!_running) return;
+
     if (_server) {
-        _server->end();
+        _server->stop();
         delete _server;
         _server = nullptr;
     }
-    
+
     _running = false;
     Logger::getInstance().info("[WebServer] Server stopped");
 }
 
-void WebServerManager::setupWebSocket() {
-    _ws->onEvent(onWsEvent);
-    _server->addHandler(_ws);
+void WebServerManager::handle() {
+    if (!_running || !_server) return;
+    _server->handleClient();
 }
 
 void WebServerManager::setupRoutes() {
-    // Serve root index.html
-    _server->on("/", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        handleRoot(request);
-    });
-    
+    // Root
+    _server->on("/", HTTP_GET, [this]() { handleRoot(); });
+
     // API endpoints
-    _server->on("/api/status", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        handleGetStatus(request);
-    });
-    
-    _server->on("/api/meter", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        handleGetMeter(request);
-    });
-    
-    _server->on("/api/config", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        handleGetConfig(request);
-    });
-    
-    _server->on("/api/config", HTTP_POST, 
-        [](AsyncWebServerRequest* request) {
-            request->send(200);
-        },
-        nullptr,
-        [this](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-            handlePostConfig(request, data, len);
-        }
-    );
-    
-    _server->on("/api/logs", HTTP_GET, [this](AsyncWebServerRequest* request) {
-        handleGetLogs(request);
-    });
-    
-    // Serve static files from SPIFFS
-    _server->serveStatic("/", SPIFFS, "/data/")
-        .setDefaultFile("index.html")
-        .setCacheControl("max-age=600");
-    
-    // 404 handler
-    _server->onNotFound([this](AsyncWebServerRequest* request) {
-        handleNotFound(request);
-    });
+    _server->on("/api/status", HTTP_GET, [this]() { handleGetStatus(); });
+    _server->on("/api/meter", HTTP_GET, [this]() { handleGetMeter(); });
+    _server->on("/api/config", HTTP_GET, [this]() { handleGetConfig(); });
+    _server->on("/api/config", HTTP_POST, [this]() { handlePostConfig(); });
+    _server->on("/api/logs", HTTP_GET, [this]() { handleGetLogs(); });
+
+    // Preflight CORS
+    _server->on("/api/status", HTTP_OPTIONS, [this]() { addCORSHeaders(); _server->send(204); });
+    _server->on("/api/meter", HTTP_OPTIONS, [this]() { addCORSHeaders(); _server->send(204); });
+    _server->on("/api/config", HTTP_OPTIONS, [this]() { addCORSHeaders(); _server->send(204); });
+    _server->on("/api/logs", HTTP_OPTIONS, [this]() { addCORSHeaders(); _server->send(204); });
+
+    // Static file passthrough for /data/*
+    _server->onNotFound([this]() { handleNotFound(); });
 }
 
-void WebServerManager::handle() {
-    if (!_running) {
+bool WebServerManager::streamFile(const char* path, const char* contentType) {
+    if (!SPIFFS.exists(path)) {
+        return false;
+    }
+    File f = SPIFFS.open(path, "r");
+    if (!f) return false;
+    addCORSHeaders();
+    _server->streamFile(f, contentType);
+    f.close();
+    return true;
+}
+
+void WebServerManager::handleRoot() {
+    // Prefer SPIFFS hosted UI
+    if (streamFile("/data/index.html", "text/html")) {
         return;
     }
-    
-    // Cleanup WebSocket clients
-    _ws->cleanupClients();
-    
-    // Auto-broadcast meter data every second
-    uint32_t now = millis();
-    if (now - _lastBroadcastTime >= BROADCAST_INTERVAL_MS) {
-        if (_ws->count() > 0) {
-            broadcastMeterData();
-        }
-        _lastBroadcastTime = now;
+
+    String html;
+    html.reserve(1024);
+    html += "<html><head><title>SM-GE3222M V2</title></head><body>";
+    html += "<h1>SM-GE3222M Smart Energy Monitor V2.0</h1>";
+    html += "<p>Web UI not installed. Upload web files to SPIFFS under <code>/data/</code>.</p>";
+    html += "<p>API Endpoints:</p><ul>";
+    html += "<li><a href='/api/status'>/api/status</a> - System Status</li>";
+    html += "<li><a href='/api/meter'>/api/meter</a> - Meter Data</li>";
+    html += "<li><a href='/api/config'>/api/config</a> - Configuration</li>";
+    html += "<li><a href='/api/logs'>/api/logs</a> - Recent Logs</li>";
+    html += "</ul>";
+    html += "<p><b>Note:</b> WebSocket streaming is disabled in this build. Poll <code>/api/meter</code>.</p>";
+    html += "</body></html>";
+
+    addCORSHeaders();
+    _server->send(200, "text/html", html);
+}
+
+void WebServerManager::handleGetStatus() {
+    addCORSHeaders();
+    _server->send(200, "application/json", getSystemStatusJson());
+}
+
+void WebServerManager::handleGetMeter() {
+    addCORSHeaders();
+    _server->send(200, "application/json", getMeterDataJson());
+}
+
+void WebServerManager::handleGetConfig() {
+    addCORSHeaders();
+    _server->send(200, "application/json", getConfigJson());
+}
+
+void WebServerManager::handlePostConfig() {
+    addCORSHeaders();
+
+    if (!_server->hasArg("plain")) {
+        _server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Missing body\"}");
+        return;
     }
-}
 
-void WebServerManager::handleRoot(AsyncWebServerRequest* request) {
-    if (SPIFFS.exists("/data/index.html")) {
-        request->send(SPIFFS, "/data/index.html", "text/html");
-    } else {
-        String html = "<html><head><title>SM-GE3222M V2</title></head>";
-        html += "<body><h1>SM-GE3222M Smart Energy Monitor V2.0</h1>";
-        html += "<p>Web interface not installed. Upload web files to SPIFFS /data/ directory.</p>";
-        html += "<p>API Endpoints:</p><ul>";
-        html += "<li><a href='/api/status'>/api/status</a> - System Status</li>";
-        html += "<li><a href='/api/meter'>/api/meter</a> - Meter Data</li>";
-        html += "<li><a href='/api/config'>/api/config</a> - Configuration</li>";
-        html += "<li><a href='/api/logs'>/api/logs</a> - Recent Logs</li>";
-        html += "<li>WebSocket: ws://" + request->host() + "/ws</li>";
-        html += "</ul></body></html>";
-        request->send(200, "text/html", html);
-    }
-}
+    String body = _server->arg("plain");
 
-void WebServerManager::handleGetStatus(AsyncWebServerRequest* request) {
-    String json = getSystemStatusJson();
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
-    addCORSHeaders(response);
-    request->send(response);
-}
-
-void WebServerManager::handleGetMeter(AsyncWebServerRequest* request) {
-    String json = getMeterDataJson();
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
-    addCORSHeaders(response);
-    request->send(response);
-}
-
-void WebServerManager::handleGetConfig(AsyncWebServerRequest* request) {
-    String json = getConfigJson();
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
-    addCORSHeaders(response);
-    request->send(response);
-}
-
-void WebServerManager::handlePostConfig(AsyncWebServerRequest* request, uint8_t* data, size_t len) {
-    String body = String((char*)data).substring(0, len);
-    
     StaticJsonDocument<2048> doc;
     DeserializationError error = deserializeJson(doc, body);
-    
+
     if (error) {
-        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        _server->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
         return;
     }
-    
+
     // Use ProtocolV2 to handle config update
-    String command = "setConfig";
     String response = ProtocolV2::getInstance().handleSetConfig(doc);
-    
-    AsyncWebServerResponse* resp = request->beginResponse(200, "application/json", response);
-    addCORSHeaders(resp);
-    request->send(resp);
+    _server->send(200, "application/json", response);
 }
 
-void WebServerManager::handleGetLogs(AsyncWebServerRequest* request) {
+void WebServerManager::handleGetLogs() {
     int count = 50;
-    if (request->hasParam("count")) {
-        count = request->getParam("count")->value().toInt();
+    if (_server->hasArg("count")) {
+        count = _server->arg("count").toInt();
+        if (count < 1) count = 1;
+        if (count > 500) count = 500;
     }
-    
-    String json = getLogsJson(count);
-    AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
-    addCORSHeaders(response);
-    request->send(response);
+
+    addCORSHeaders();
+    _server->send(200, "application/json", getLogsJson(count));
 }
 
-void WebServerManager::handleNotFound(AsyncWebServerRequest* request) {
-    request->send(404, "application/json", "{\"status\":\"error\",\"message\":\"Not found\"}");
-}
+void WebServerManager::handleNotFound() {
+    // Serve SPIFFS static files under /data/
+    String uri = _server->uri();
+    if (uri.startsWith("/data/")) {
+        // content-type guess
+        const char* type = "text/plain";
+        if (uri.endsWith(".html")) type = "text/html";
+        else if (uri.endsWith(".css")) type = "text/css";
+        else if (uri.endsWith(".js")) type = "application/javascript";
+        else if (uri.endsWith(".json")) type = "application/json";
+        else if (uri.endsWith(".png")) type = "image/png";
+        else if (uri.endsWith(".jpg") || uri.endsWith(".jpeg")) type = "image/jpeg";
+        else if (uri.endsWith(".svg")) type = "image/svg+xml";
 
-void WebServerManager::onWsEvent(AsyncWebSocket* server, AsyncWebSocketClient* client, 
-                                 AwsEventType type, void* arg, uint8_t* data, size_t len) {
-    WebServerManager* instance = &WebServerManager::getInstance();
-    
-    switch (type) {
-        case WS_EVT_CONNECT:
-            {
-            String ip = client->remoteIP().toString();
-            Logger::getInstance().info("[WebSocket] Client #%u connected from %s", (unsigned)client->id(), ip.c_str());
-// Send initial data to newly connected client
-            instance->broadcastMeterData();
-        }
-        break;
-            
-        case WS_EVT_DISCONNECT:
-            Logger::getInstance().info("[WebSocket] Client #%u disconnected", (unsigned)client->id());
-break;
-            
-        case WS_EVT_DATA: {
-            AwsFrameInfo* info = (AwsFrameInfo*)arg;
-            if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-                data[len] = 0;
-                String message = String((char*)data);
-                instance->handleWsMessage(client, message);
-            }
-            break;
-        }
-        
-        case WS_EVT_PONG:
-        case WS_EVT_ERROR:
-            break;
-    }
-}
-
-void WebServerManager::handleWsMessage(AsyncWebSocketClient* client, const String& message) {
-    Logger::getInstance().debug("[WebSocket] Message: %s", message.c_str());
-// Try to parse as JSON command
-    StaticJsonDocument<512> doc;
-    DeserializationError error = deserializeJson(doc, message);
-    
-    if (!error && doc.containsKey("cmd")) {
-        String command = doc["cmd"].as<String>();
-        String response;
-        
-        if (command == "getMeterData") {
-            response = getMeterDataJson();
-        } else if (command == "getStatus") {
-            response = getSystemStatusJson();
-        } else if (command == "getConfig") {
-            response = getConfigJson();
-        } else {
-            // Use ProtocolV2 for complex commands
-            response = ProtocolV2::getInstance().handleCommand(command, doc);
-        }
-        
-        if (response.length() > 0) {
-            client->text(response);
-        }
-    } else {
-        // Legacy text commands (V1.0 compatibility)
-        String cmd = message;
-        cmd.trim();
-        cmd.toLowerCase();
-        
-        if (cmd == "getreadings" || cmd == "getmeterdata") {
-            client->text(getMeterDataJson());
-        } else if (cmd == "getmeterinfo" || cmd == "getstatus") {
-            client->text(getSystemStatusJson());
-        } else if (cmd == "getconfig") {
-            client->text(getConfigJson());
+        if (streamFile(uri.c_str(), type)) {
+            return;
         }
     }
+
+    addCORSHeaders();
+    _server->send(404, "application/json", "{\"status\":\"error\",\"message\":\"Not found\"}");
 }
 
-void WebServerManager::broadcastMeterData() {
-    if (!_running || !_ws || _ws->count() == 0) {
-        return;
-    }
-    
-    String json = getMeterDataJson();
-    _ws->textAll(json);
+void WebServerManager::addCORSHeaders() {
+    if (!_server) return;
+    _server->sendHeader("Access-Control-Allow-Origin", "*");
+    _server->sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    _server->sendHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-void WebServerManager::broadcastSystemStatus() {
-    if (!_running || !_ws || _ws->count() == 0) {
-        return;
-    }
-    
-    String json = getSystemStatusJson();
-    _ws->textAll(json);
-}
-
-void WebServerManager::broadcastEvent(const String& event, const String& data) {
-    if (!_running || !_ws || _ws->count() == 0) {
-        return;
-    }
-    
-    StaticJsonDocument<512> doc;
-    doc["event"] = event;
-    doc["data"] = data;
-    doc["timestamp"] = millis();
-    
-    String json;
-    serializeJson(doc, json);
-    _ws->textAll(json);
-}
-
-size_t WebServerManager::getClientCount() const {
-    if (_ws) {
-        return _ws->count();
-    }
-    return 0;
-}
+// ============================================================================
+// JSON Builders (largely unchanged)
+// ============================================================================
 
 String WebServerManager::getMeterDataJson() {
+    StaticJsonDocument<1024> doc;
     MeterData data = EnergyMeter::getInstance().getSnapshot();
-    if (!data.valid) {
-        return "{\"status\":\"error\",\"message\":\"Meter data not ready\"}";
-    }
 
-    DynamicJsonDocument doc(4096);
-    ProtocolV2::getInstance().meterDataToJson(data, doc);
+    doc["valid"] = data.valid;
+    doc["timestamp"] = data.timestamp;
+    // Frequency is a single value reported by the metering IC (shared across phases)
+    doc["frequency"] = data.frequency;
 
-    String output;
-    serializeJson(doc, output);
-    return output;
+    JsonObject a = doc.createNestedObject("phaseA");
+    // Keep the JSON field names stable, map to RMS fields in PhaseData
+    a["voltage"] = data.phaseA.voltageRMS;
+    a["current"] = data.phaseA.currentRMS;
+    a["activePower"] = data.phaseA.activePower;
+    a["reactivePower"] = data.phaseA.reactivePower;
+    a["apparentPower"] = data.phaseA.apparentPower;
+    a["powerFactor"] = data.phaseA.powerFactor;
+    a["frequency"] = data.frequency;
+
+    JsonObject b = doc.createNestedObject("phaseB");
+    b["voltage"] = data.phaseB.voltageRMS;
+    b["current"] = data.phaseB.currentRMS;
+    b["activePower"] = data.phaseB.activePower;
+    b["reactivePower"] = data.phaseB.reactivePower;
+    b["apparentPower"] = data.phaseB.apparentPower;
+    b["powerFactor"] = data.phaseB.powerFactor;
+    b["frequency"] = data.frequency;
+
+    JsonObject c = doc.createNestedObject("phaseC");
+    c["voltage"] = data.phaseC.voltageRMS;
+    c["current"] = data.phaseC.currentRMS;
+    c["activePower"] = data.phaseC.activePower;
+    c["reactivePower"] = data.phaseC.reactivePower;
+    c["apparentPower"] = data.phaseC.apparentPower;
+    c["powerFactor"] = data.phaseC.powerFactor;
+    c["frequency"] = data.frequency;
+
+    JsonObject t = doc.createNestedObject("total");
+    t["activePower"] = data.totalActivePower;
+    t["reactivePower"] = data.totalReactivePower;
+    t["apparentPower"] = data.totalApparentPower;
+    t["powerFactor"] = data.totalPowerFactor;
+    t["frequency"] = data.frequency;
+
+    String out;
+    serializeJson(doc, out);
+    return out;
 }
 
-
 String WebServerManager::getSystemStatusJson() {
+    StaticJsonDocument<1024> doc;
     SystemStatus status = SystemMonitor::getInstance().getSystemStatus();
-    DynamicJsonDocument doc(2048);
-    ProtocolV2::getInstance().systemStatusToJson(status, doc);
-    
-    String output;
-    serializeJson(doc, output);
-    return output;
+
+    doc["uptime"] = status.uptime;
+    doc["freeHeap"] = status.freeHeap;
+    doc["minFreeHeap"] = status.minFreeHeap;
+    // Keep JSON field names stable while mapping to current SystemStatus fields
+    doc["cpuFreqMHz"] = status.cpuFreqMHz;
+    doc["cpuTemp"] = status.cpuTemperature;
+    doc["wifiConnected"] = status.wifiConnected;
+    doc["mqttConnected"] = status.mqttConnected;
+    doc["modbusActive"] = status.modbusActive;
+    doc["bootCount"] = status.bootCount;
+    doc["errorCount"] = status.errorCount;
+
+    // Network details come from SMNetworkManager (WiFi). Ethernet is not implemented in this build.
+    int rssi = 0;
+    String ip = "";
+    String mac = "";
+    if (SMNetworkManager::getInstance().isConnected()) {
+        rssi = SMNetworkManager::getInstance().getRSSI();
+        ip = SMNetworkManager::getInstance().getLocalIP();
+        mac = SMNetworkManager::getInstance().getMACAddress();
+    }
+    doc["wifiRSSI"] = rssi;
+    doc["ipAddress"] = ip;
+    doc["macAddress"] = mac;
+
+    doc["lastError"] = (int)status.lastError;
+
+    String out;
+    serializeJson(doc, out);
+    return out;
 }
 
 String WebServerManager::getConfigJson() {
-    DynamicJsonDocument doc(4096);
-    ProtocolV2::getInstance().configToJson(doc);
-    
-    String output;
-    serializeJson(doc, output);
-    return output;
+    StaticJsonDocument<1024> doc;
+
+    WiFiConfig wifi;
+    ModbusConfig modbus;
+    MQTTConfig mqtt;
+    NetworkConfig net;
+    SystemConfig sys;
+
+    ConfigManager::getInstance().getWiFiConfig(wifi);
+    ConfigManager::getInstance().getModbusConfig(modbus);
+    ConfigManager::getInstance().getMQTTConfig(mqtt);
+    ConfigManager::getInstance().getNetworkConfig(net);
+    ConfigManager::getInstance().getSystemConfig(sys);
+
+    JsonObject jw = doc.createNestedObject("wifi");
+    jw["enabled"] = wifi.enabled;
+    jw["apMode"] = wifi.apMode;
+    jw["useDHCP"] = wifi.useDHCP;
+    jw["ssid"] = wifi.ssid;
+    jw["hostname"] = wifi.hostname;
+    jw["apSSID"] = wifi.apSSID;
+
+    JsonObject jm = doc.createNestedObject("modbus");
+    jm["rtuEnabled"] = modbus.rtuEnabled;
+    jm["tcpEnabled"] = modbus.tcpEnabled;
+    jm["slaveID"] = modbus.slaveID;
+    jm["baudrate"] = modbus.baudrate;
+    jm["tcpPort"] = modbus.tcpPort;
+
+    JsonObject jq = doc.createNestedObject("mqtt");
+    jq["enabled"] = mqtt.enabled;
+    jq["broker"] = mqtt.broker;
+    jq["port"] = mqtt.port;
+    jq["baseTopic"] = mqtt.baseTopic;
+    jq["publishInterval"] = mqtt.publishInterval;
+
+    JsonObject jn = doc.createNestedObject("network");
+    jn["hostname"] = net.hostname;
+    jn["mdnsEnabled"] = net.mdnsEnabled;
+    jn["mdnsName"] = net.mdnsName;
+    jn["ntpEnabled"] = net.ntpEnabled;
+    jn["ntpServer"] = net.ntpServer;
+    jn["timezoneOffset"] = net.timezoneOffset;
+
+    JsonObject js = doc.createNestedObject("system");
+    js["readInterval"] = sys.readInterval;
+    js["publishInterval"] = sys.publishInterval;
+    js["webServerPort"] = sys.webServerPort;
+    js["otaEnabled"] = sys.otaEnabled;
+
+    String out;
+    serializeJson(doc, out);
+    return out;
 }
 
 String WebServerManager::getLogsJson(int count) {
-    DynamicJsonDocument doc(4096);
-    JsonArray logs = doc.createNestedArray("logs");
-    
-    // Get recent logs from DataLogger
-    // This is a placeholder - actual implementation depends on DataLogger API
-    
-    doc["count"] = logs.size();
-    doc["timestamp"] = millis();
-    
-    String output;
-    serializeJson(doc, output);
-    return output;
-}
+    StaticJsonDocument<2048> doc;
+    JsonArray arr = doc.createNestedArray("logs");
 
-void WebServerManager::addCORSHeaders(AsyncWebServerResponse* response) {
-    response->addHeader("Access-Control-Allow-Origin", "*");
-    response->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+    std::vector<LoggedReading> readings = DataLogger::getInstance().getRecentReadings(count);
+    for (const auto& r : readings) {
+        JsonObject o = arr.createNestedObject();
+        o["ts"] = r.timestamp;
+        o["va"] = r.data.phaseA.voltageRMS;
+        o["ia"] = r.data.phaseA.currentRMS;
+        o["pa"] = r.data.phaseA.activePower;
+        o["vb"] = r.data.phaseB.voltageRMS;
+        o["ib"] = r.data.phaseB.currentRMS;
+        o["pb"] = r.data.phaseB.activePower;
+        o["vc"] = r.data.phaseC.voltageRMS;
+        o["ic"] = r.data.phaseC.currentRMS;
+        o["pc"] = r.data.phaseC.activePower;
+    }
+
+    String out;
+    serializeJson(doc, out);
+    return out;
 }

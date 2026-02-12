@@ -161,9 +161,11 @@ bool initPhase1_HAL() {
     }
     checkBootStep("SPI Bus Init", true);
     
-    // Initialize I2C Bus
-    if (!I2CBus::getInstance().init()) {
-        return checkBootStatus("I2C Bus Init", false);
+    // Initialize I2C Bus (idempotent)
+    if (!I2CBus::getInstance().isInitialized()) {
+        if (!I2CBus::getInstance().init()) {
+            return checkBootStatus("I2C Bus Init", false);
+        }
     }
     checkBootStep("I2C Bus Init", true);
     
@@ -171,11 +173,10 @@ bool initPhase1_HAL() {
     SystemMonitor::getInstance().init();
     checkBootStep("System Monitor Init", true);
     
-    // Initialize Watchdog Manager
-    if (!WatchdogManager::getInstance().init(30)) {
-        return checkBootStatus("Watchdog Init", false);
-    }
-    checkBootStep("Watchdog Init", true);
+    // Initialize Watchdog Manager (non-fatal if already initialized by core)
+    bool wdtOk = WatchdogManager::getInstance().init(30);
+    checkBootStep("Watchdog Init", wdtOk);
+    // Do NOT halt the system here: on some Arduino/ESP-IDF builds, TWDT is initialized before sketch startup.
     
     return true;
 }
@@ -223,8 +224,11 @@ bool initPhase2_Storage() {
     checkBootStep("System Config Loaded", true);
     
     // Initialize Data Logger
-    DataLogger::getInstance().init(1000); // 1000 entry ring buffer
-    checkBootStep("Data Logger Init", true);
+    // Initialize Data Logger with a safe default (avoid heap exhaustion when PSRAM is not present)
+    size_t logEntries = psramFound() ? 1000 : 200;
+    bool dlOk = DataLogger::getInstance().init((uint16_t)logEntries);
+    { String _step = String("Data Logger Init (") + String(logEntries) + String(" entries)"); checkBootStep(_step.c_str(), dlOk); }
+
     
     return true;
 }
@@ -333,18 +337,22 @@ bool initPhase5_Communications() {
     printBootPhase("5", "Communication Protocols Initialization");
     
     // Initialize TCP Data Server (V1 compatible)
-    if (!TCPDataServer::getInstance().begin(8088)) {
+    bool tcpOk = TCPDataServer::getInstance().begin(8088);
+    if (!tcpOk) {
         Serial.println("  WARNING: TCP Server init failed");
     }
-    checkBootStep("TCP Data Server (port 8088)", true);
+    checkBootStep("TCP Data Server (port 8088)", tcpOk);
+
     
-    // Initialize Web Server
-    if (!WebServerManager::getInstance().begin(80)) {
+    // Initialize Web Server (socket-based WebServer; WebSocket streaming disabled)
+    bool webOk = WebServerManager::getInstance().begin(80);
+    if (!webOk) {
         Serial.println("  WARNING: Web Server init failed");
     }
-    checkBootStep("Web Server (port 80)", true);
-    checkBootStep("WebSocket (/ws)", true);
-    checkBootStep("REST API (/api/*)", true);
+    checkBootStep("Web Server (port 80)", webOk);
+    checkBootStep("REST API (/api/*)", webOk);
+    checkBootStep("WebSocket (/ws) (disabled)", false);
+
     
     // Initialize Modbus Server
     ModbusConfig modbusConfig;

@@ -7,6 +7,7 @@
 #include "Logger.h"
 #include "DataTypes.h"
 #include <esp_system.h>
+#include <esp_err.h>
 
 WatchdogManager& WatchdogManager::getInstance() {
     static WatchdogManager instance;
@@ -16,12 +17,13 @@ WatchdogManager& WatchdogManager::getInstance() {
 WatchdogManager::WatchdogManager() 
     : _enabled(false)
     , _initialized(false)
+    , _ownsTwdt(false)
     , _timeoutSeconds(30)
     , _mainTaskHandle(nullptr) {
 }
 
 WatchdogManager::~WatchdogManager() {
-    if (_initialized && _enabled) {
+    if (_initialized && _enabled && _ownsTwdt) {
         esp_task_wdt_deinit();
     }
 }
@@ -42,7 +44,14 @@ bool WatchdogManager::init(uint32_t timeoutSeconds) {
     };
     
     esp_err_t err = esp_task_wdt_init(&twdt_config);
-    if (err != ESP_OK) {
+    if (err == ESP_OK) {
+        _ownsTwdt = true;
+    } else if (err == ESP_ERR_INVALID_STATE) {
+        // TWDT may already be initialized by Arduino/ESP-IDF startup code.
+        // Treat as non-fatal and continue by attaching our tasks.
+        _ownsTwdt = false;
+        Logger::getInstance().warn("WatchdogManager: TWDT already initialized (will attach tasks)");
+    } else {
         Logger::getInstance().error("WatchdogManager: Init failed (err=%d)", err);
         return false;
     }
@@ -52,7 +61,9 @@ bool WatchdogManager::init(uint32_t timeoutSeconds) {
     err = esp_task_wdt_add(_mainTaskHandle);
     if (err != ESP_OK) {
         Logger::getInstance().error("WatchdogManager: Failed to add main task (err=%d)", err);
-        esp_task_wdt_deinit();
+        if (_ownsTwdt) {
+            esp_task_wdt_deinit();
+        }
         return false;
     }
     

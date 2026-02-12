@@ -17,12 +17,12 @@ EnergyMeter::EnergyMeter()
 
 bool EnergyMeter::init(uint8_t filterSize) {
     if (m_initialized) {
-        Logger::getInstance().warn("EnergyMeter", "Already initialized");
+        Logger::getInstance().warn("EnergyMeter: Already initialized");
         return true;
     }
 
     if (filterSize == 0 || filterSize > 10) {
-        Logger::getInstance().error("EnergyMeter", "Invalid filter size, must be 1-10");
+        Logger::getInstance().error("EnergyMeter: Invalid filter size, must be 1-10");
         return false;
     }
 
@@ -30,7 +30,7 @@ bool EnergyMeter::init(uint8_t filterSize) {
     
     m_mutex = xSemaphoreCreateMutex();
     if (m_mutex == nullptr) {
-        Logger::getInstance().error("EnergyMeter", "Failed to create mutex");
+        Logger::getInstance().error("EnergyMeter: Failed to create mutex");
         return false;
     }
 
@@ -42,7 +42,7 @@ bool EnergyMeter::init(uint8_t filterSize) {
 
 bool EnergyMeter::update() {
     if (!m_initialized) {
-        Logger::getInstance().error("EnergyMeter", "Not initialized");
+        Logger::getInstance().error("EnergyMeter: Not initialized");
         return false;
     }
 
@@ -50,7 +50,7 @@ bool EnergyMeter::update() {
     ATM90E36Driver& driver = ATM90E36Driver::getInstance();
     
     if (!driver.readAll(rawData)) {
-        Logger::getInstance().error("EnergyMeter", "Failed to read from ATM90E36");
+        Logger::getInstance().error("EnergyMeter: Failed to read from ATM90E36");
         return false;
     }
 
@@ -63,7 +63,7 @@ bool EnergyMeter::update() {
         m_snapshot.valid = true;
         xSemaphoreGive(m_mutex);
     } else {
-        Logger::getInstance().warn("EnergyMeter", "Mutex timeout during update");
+        Logger::getInstance().warn("EnergyMeter: Mutex timeout during update");
         return false;
     }
 
@@ -77,7 +77,7 @@ MeterData EnergyMeter::getSnapshot() {
         data = m_snapshot;
         xSemaphoreGive(m_mutex);
     } else {
-        Logger::getInstance().warn("EnergyMeter", "Mutex timeout during getSnapshot");
+        Logger::getInstance().warn("EnergyMeter: Mutex timeout during getSnapshot");
         data.valid = false;
     }
     
