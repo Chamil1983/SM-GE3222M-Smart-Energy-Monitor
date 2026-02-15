@@ -1,5 +1,28 @@
 // WebSocket connection
 let ws = null;
+let pollTimer = null;
+
+function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(fetchInitialData, 1000);
+
+    // Show that we are updating via HTTP while WS is down.
+    const wsStatus = document.getElementById('wsStatus');
+    const wsStatusText = document.getElementById('wsStatusText');
+    if (wsStatus) {
+        wsStatus.className = 'status-indicator connected';
+    }
+    if (wsStatusText) {
+        wsStatusText.textContent = 'HTTP polling';
+    }
+}
+
+function stopPolling() {
+    if (!pollTimer) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+}
+
 let reconnectInterval = null;
 let reconnectDelay = 1000;
 const maxReconnectDelay = 30000;
