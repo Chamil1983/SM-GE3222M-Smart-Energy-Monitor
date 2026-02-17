@@ -95,13 +95,15 @@ bool ConfigManager::loadWiFiConfig(WiFiConfig& config) {
     config.enabled = prefs.getBool("enabled", true);
     config.apMode = prefs.getBool("apMode", false);
     config.useDHCP = prefs.getBool("useDHCP", true);
-    config.apChannel = prefs.getUChar("apChannel", 1);
     
     prefs.getString("ssid", config.ssid, sizeof(config.ssid));
     prefs.getString("password", config.password, sizeof(config.password));
     prefs.getString("hostname", config.hostname, sizeof(config.hostname));
-    prefs.getString("apSSID", config.apSSID, sizeof(config.apSSID));
-    prefs.getString("apPassword", config.apPassword, sizeof(config.apPassword));
+
+    // SoftAP settings (fixed defaults unless explicitly stored)
+    if (prefs.isKey("apSsid"))     prefs.getString("apSsid", config.apSsid, sizeof(config.apSsid));
+    if (prefs.isKey("apPassword")) prefs.getString("apPassword", config.apPassword, sizeof(config.apPassword));
+    if (prefs.isKey("apMac"))      prefs.getString("apMac", config.apMac, sizeof(config.apMac));
     
     prefs.getBytes("staticIP", config.staticIP, sizeof(config.staticIP));
     prefs.getBytes("gateway", config.gateway, sizeof(config.gateway));
@@ -123,13 +125,15 @@ bool ConfigManager::saveWiFiConfig(const WiFiConfig& config) {
     prefs.putBool("enabled", config.enabled);
     prefs.putBool("apMode", config.apMode);
     prefs.putBool("useDHCP", config.useDHCP);
-    prefs.putUChar("apChannel", config.apChannel);
     
     prefs.putString("ssid", config.ssid);
     prefs.putString("password", config.password);
     prefs.putString("hostname", config.hostname);
-    prefs.putString("apSSID", config.apSSID);
+
+    // SoftAP settings (no channel / advanced AP params)
+    prefs.putString("apSsid", config.apSsid);
     prefs.putString("apPassword", config.apPassword);
+    prefs.putString("apMac", config.apMac);
     
     prefs.putBytes("staticIP", config.staticIP, sizeof(config.staticIP));
     prefs.putBytes("gateway", config.gateway, sizeof(config.gateway));

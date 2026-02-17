@@ -8,10 +8,14 @@
 #include "EnergyAccumulator.h"
 #include "ModbusServer.h"
 #include "TCPDataServer.h"
-#include "WebServerManager.h"
+
+#if defined(ARDUINO_ARCH_ESP32)
+#include <esp_task_wdt.h>
+#endif
 #include "MQTTPublisher.h"
 #include "ConfigManager.h"
 #include "EventBus.h"
+#include "WatchdogManager.h"
 
 TaskManager& TaskManager::getInstance() {
     static TaskManager instance;
@@ -23,10 +27,9 @@ TaskManager::TaskManager()
     , _accumulatorTask(nullptr)
     , _modbusTask(nullptr)
     , _tcpServerTask(nullptr)
-    , _webServerTask(nullptr)
     , _mqttTask(nullptr)
     , _diagnosticsTask(nullptr)
-    , _tasksRunning(false) {
+    , _tasksRunning(false), _tcpTaskOptionalFailed(false) {
 }
 
 TaskManager::~TaskManager() {
@@ -92,7 +95,7 @@ bool TaskManager::createAllTasks() {
     }
     Logger::getInstance().info("TaskManager: Created ModbusTask on Core 1");
     
-    // Create TCP Server Task (Core 0, Priority 3)
+    // Create TCP Server Task (Core 0, Priority 3) - OPTIONAL (falls back to loop polling)
     result = xTaskCreatePinnedToCore(
         tcpServerTaskFunc,
         "TCPServerTask",
@@ -102,31 +105,16 @@ bool TaskManager::createAllTasks() {
         &_tcpServerTask,
         CORE_0
     );
-    
+
     if (result != pdPASS) {
-        Logger::getInstance().error("TaskManager: Failed to create TCPServerTask");
-        return false;
+        _tcpServerTask = nullptr;
+        _tcpTaskOptionalFailed = true;
+        Logger::getInstance().error("TaskManager: Failed to create TCPServerTask (optional) - will service TCP in loop()");
+    } else {
+        Logger::getInstance().info("TaskManager: Created TCPServerTask on Core 0");
     }
-    Logger::getInstance().info("TaskManager: Created TCPServerTask on Core 0");
     
-    // Create Web Server Task (Core 0, Priority 2)
-    result = xTaskCreatePinnedToCore(
-        webServerTaskFunc,
-        "WebServerTask",
-        WEB_STACK_SIZE,
-        nullptr,
-        WEB_PRIORITY,
-        &_webServerTask,
-        CORE_0
-    );
-    
-    if (result != pdPASS) {
-        Logger::getInstance().error("TaskManager: Failed to create WebServerTask");
-        return false;
-    }
-    Logger::getInstance().info("TaskManager: Created WebServerTask on Core 0");
-    
-    // Create MQTT Task (Core 0, Priority 2)
+    // Create MQTT Task (Core 0, Priority 2) - OPTIONAL
     result = xTaskCreatePinnedToCore(
         mqttTaskFunc,
         "MQTTTask",
@@ -136,14 +124,15 @@ bool TaskManager::createAllTasks() {
         &_mqttTask,
         CORE_0
     );
-    
+
     if (result != pdPASS) {
-        Logger::getInstance().error("TaskManager: Failed to create MQTTTask");
-        return false;
+        _mqttTask = nullptr;
+        Logger::getInstance().warn("TaskManager: Failed to create MQTTTask (optional) - MQTT task disabled");
+    } else {
+        Logger::getInstance().info("TaskManager: Created MQTTTask on Core 0");
     }
-    Logger::getInstance().info("TaskManager: Created MQTTTask on Core 0");
     
-    // Create Diagnostics Task (Core 0, Priority 1)
+    // Create Diagnostics Task (Core 0, Priority 1) - OPTIONAL
     result = xTaskCreatePinnedToCore(
         diagnosticsTaskFunc,
         "DiagnosticsTask",
@@ -153,12 +142,13 @@ bool TaskManager::createAllTasks() {
         &_diagnosticsTask,
         CORE_0
     );
-    
+
     if (result != pdPASS) {
-        Logger::getInstance().error("TaskManager: Failed to create DiagnosticsTask");
-        return false;
+        _diagnosticsTask = nullptr;
+        Logger::getInstance().warn("TaskManager: Failed to create DiagnosticsTask (optional) - diagnostics task disabled");
+    } else {
+        Logger::getInstance().info("TaskManager: Created DiagnosticsTask on Core 0");
     }
-    Logger::getInstance().info("TaskManager: Created DiagnosticsTask on Core 0");
     
     _tasksRunning = true;
     Logger::getInstance().info("TaskManager: All tasks created successfully");
@@ -180,11 +170,6 @@ void TaskManager::stopAllTasks() {
     if (_mqttTask) {
         vTaskDelete(_mqttTask);
         _mqttTask = nullptr;
-    }
-    
-    if (_webServerTask) {
-        vTaskDelete(_webServerTask);
-        _webServerTask = nullptr;
     }
     
     if (_tcpServerTask) {
@@ -217,7 +202,6 @@ void TaskManager::stopAllTasks() {
 
 void TaskManager::energyTaskFunc(void* param) {
     Logger::getInstance().info("EnergyTask: Started (500ms interval)");
-    
     EnergyMeter& meter = EnergyMeter::getInstance();
     EventBus& eventBus = EventBus::getInstance();
     
@@ -229,14 +213,12 @@ void TaskManager::energyTaskFunc(void* param) {
             MeterData data = meter.getSnapshot();
             eventBus.publish(EventType::METER_DATA_UPDATED, &data, sizeof(data));
         }
-        
         vTaskDelayUntil(&lastWakeTime, interval);
     }
 }
 
 void TaskManager::accumulatorTaskFunc(void* param) {
     Logger::getInstance().info("AccumulatorTask: Started (1000ms interval)");
-    
     EnergyAccumulator& accumulator = EnergyAccumulator::getInstance();
     EnergyMeter& meter = EnergyMeter::getInstance();
     
@@ -255,19 +237,17 @@ void TaskManager::accumulatorTaskFunc(void* param) {
             accumulator.saveToNVS();
             autoSaveCounter = 0;
         }
-        
         vTaskDelayUntil(&lastWakeTime, interval);
     }
 }
 
 void TaskManager::modbusTaskFunc(void* param) {
     Logger::getInstance().info("ModbusTask: Started (10ms poll)");
-    
     ModbusServer& modbus = ModbusServer::getInstance();
     EnergyMeter& meter = EnergyMeter::getInstance();
     
     TickType_t lastWakeTime = xTaskGetTickCount();
-    const TickType_t interval = pdMS_TO_TICKS(10);
+    const TickType_t interval = pdMS_TO_TICKS(50);
     
     uint32_t updateCounter = 0;
     const uint32_t UPDATE_INTERVAL = 50;  // Update every 500ms
@@ -281,14 +261,12 @@ void TaskManager::modbusTaskFunc(void* param) {
             modbus.updateMeterData(data);
             updateCounter = 0;
         }
-        
         vTaskDelayUntil(&lastWakeTime, interval);
     }
 }
 
 void TaskManager::tcpServerTaskFunc(void* param) {
     Logger::getInstance().info("TCPServerTask: Started (event-driven)");
-    
     TCPDataServer& tcpServer = TCPDataServer::getInstance();
     
     while (true) {
@@ -297,33 +275,8 @@ void TaskManager::tcpServerTaskFunc(void* param) {
     }
 }
 
-void TaskManager::webServerTaskFunc(void* param) {
-    Logger::getInstance().info("WebServerTask: Started (10ms interval)");
-    
-    WebServerManager& webServer = WebServerManager::getInstance();
-    
-    TickType_t lastWakeTime = xTaskGetTickCount();
-    const TickType_t interval = pdMS_TO_TICKS(10);
-    
-    uint32_t broadcastCounter = 0;
-    const uint32_t BROADCAST_INTERVAL = 100;  // Broadcast every 1 second
-    
-    while (true) {
-        webServer.handle();
-        
-        broadcastCounter++;
-        if (broadcastCounter >= BROADCAST_INTERVAL) {
-            webServer.broadcastMeterData();
-            broadcastCounter = 0;
-        }
-        
-        vTaskDelayUntil(&lastWakeTime, interval);
-    }
-}
-
 void TaskManager::mqttTaskFunc(void* param) {
     Logger::getInstance().info("MQTTTask: Started");
-    
     MQTTPublisher& mqtt = MQTTPublisher::getInstance();
     EnergyMeter& meter = EnergyMeter::getInstance();
     ConfigManager& config = ConfigManager::getInstance();
@@ -348,14 +301,12 @@ void TaskManager::mqttTaskFunc(void* param) {
                 lastPublish = now;
             }
         }
-        
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 void TaskManager::diagnosticsTaskFunc(void* param) {
     Logger::getInstance().info("DiagnosticsTask: Started (5000ms interval)");
-    
     TickType_t lastWakeTime = xTaskGetTickCount();
     const TickType_t interval = pdMS_TO_TICKS(5000);
     
@@ -363,12 +314,16 @@ void TaskManager::diagnosticsTaskFunc(void* param) {
         uint32_t freeHeap = ESP.getFreeHeap();
         uint32_t minFreeHeap = ESP.getMinFreeHeap();
         
-        Logger::getInstance().debug("Heap: %u bytes free (min: %u)", freeHeap, minFreeHeap);
+        static uint32_t lastLogMs = 0;
+        uint32_t nowMs = millis();
+        if (nowMs - lastLogMs > 60000) {
+            lastLogMs = nowMs;
+            Logger::getInstance().info("Heap: %u bytes free (min: %u)", freeHeap, minFreeHeap);
+        }
         
         if (freeHeap < 10000) {
             Logger::getInstance().warn("Low heap memory: %u bytes", freeHeap);
         }
-        
         vTaskDelayUntil(&lastWakeTime, interval);
     }
 }

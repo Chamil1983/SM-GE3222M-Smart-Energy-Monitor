@@ -32,6 +32,16 @@ private:
     WatchdogManager& operator=(const WatchdogManager&) = delete;
     
     static void panicHandler();
+
+    // Track tasks successfully registered with TWDT.
+    // This avoids calling esp_task_wdt_reset() from a task that isn't registered,
+    // which produces: "task not found" and can stall the firmware with log spam.
+    static constexpr int MAX_WDT_TASKS = 12;
+    TaskHandle_t _subscribedTasks[MAX_WDT_TASKS];
+    int _subscribedCount;
+    bool isTaskSubscribed(TaskHandle_t h) const;
+    void addSubscribed(TaskHandle_t h);
+    void removeSubscribed(TaskHandle_t h);
     
     bool _enabled;
     bool _initialized;

@@ -47,6 +47,21 @@ bool SPIBus::init(int8_t sck, int8_t miso, int8_t mosi, uint32_t frequency) {
     return true;
 }
 
+
+void SPIBus::reinit() {
+    // If not initialized yet, just init
+    if (!m_initialized) {
+        init();
+        return;
+    }
+    if (m_mutex && xSemaphoreTake(m_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        SPI.end();
+        delay(1);
+        SPI.begin(m_sckPin, m_misoPin, m_mosiPin);
+        xSemaphoreGive(m_mutex);
+    }
+}
+
 bool SPIBus::init() {
     // Initialize with default pins from PinMap.h
     return init(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, SPI_FREQUENCY_ATM90E36);
@@ -65,6 +80,10 @@ uint16_t SPIBus::transfer16(uint8_t csPin, uint16_t data, uint32_t frequency, ui
     if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         return 0xFFFF; // Timeout
     }
+
+    // Ensure CS pin is configured as output (robust against accidental reconfiguration)
+    pinMode(csPin, OUTPUT);
+    digitalWrite(csPin, HIGH);
 
     SPISettings settings(frequency, MSBFIRST, mode);
     
@@ -144,6 +163,11 @@ uint16_t SPIBus::commEnergyIC(uint8_t csPin, uint8_t rw, uint16_t address, uint1
 
     // SPI Settings for ATM90E36: 200kHz, MSB first, Mode 3
     SPISettings settings(SPI_FREQUENCY_ATM90E36, MSBFIRST, SPI_MODE_ATM90E36);
+
+    // Ensure CS pin is configured correctly (robust against accidental reconfiguration)
+    pinMode(csPin, OUTPUT);
+    digitalWrite(csPin, HIGH);
+    delayMicroseconds(2);
 
     // Begin transaction
     SPI.beginTransaction(settings);

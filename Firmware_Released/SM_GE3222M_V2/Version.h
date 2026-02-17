@@ -7,9 +7,9 @@
 // ============================================================================
 #define FW_VERSION_MAJOR    2
 #define FW_VERSION_MINOR    0
-#define FW_VERSION_PATCH    0
+#define FW_VERSION_PATCH    1
 
-#define FW_VERSION          "2.0.0"
+#define FW_VERSION          "2.0.1"
 #define FW_BUILD_DATE       __DATE__
 #define FW_BUILD_TIME       __TIME__
 
@@ -46,7 +46,7 @@
 #define FEATURE_WIFI        1
 #define FEATURE_ETHERNET    0   // Optional W5500
 #define FEATURE_MODBUS_RTU  1
-#define FEATURE_MODBUS_TCP  1
+#define FEATURE_MODBUS_TCP  0
 #define FEATURE_MQTT        1
 #define FEATURE_WEBSOCKET   1
 #define FEATURE_OTA         1

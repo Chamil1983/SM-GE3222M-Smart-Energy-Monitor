@@ -80,53 +80,62 @@ bool CalibrationManager::saveCalibration(const CalibrationConfig& config) {
 
 CalibrationConfig CalibrationManager::getDefaultCalibration() {
     CalibrationConfig config;
-    
-    // V1.0 Factory Defaults
-    config.lineFreq = 389;  // MMODE0 value for 50Hz (0x0185)
-    config.pgaGain = 0x0101;  // PGA Gain configuration (factory default)
-    config.pmpga = 0;
-    
-    // Thresholds (V1.0 defaults)
-    config.pStartTh = 0x08BD;
-    config.qStartTh = 0x0AEC;
-    config.sStartTh = 0x0AEC;
-    config.pPhaseTh = 0x00D8;
-    config.qPhaseTh = 0x00D8;
-    config.sPhaseTh = 0x00D8;
-    
+
+    // Factory defaults extracted from SM_GE3222M V1.0 -> Definitions.h (ATM90E36 section)
+    // LineFreq: MMODE0 value for 50Hz 3P4W
+    config.lineFreq = 389;          // 0x0185
+    config.pgaGain  = 0x557F;       // 0b0101010101111111 (MMODE1)
+
+    // V1.0 uses 0 for thresholds by default (can be tuned later)
+    config.pmpga    = 0;
+    config.pStartTh = 0x0000;
+    config.qStartTh = 0x0000;
+    config.sStartTh = 0x0000;
+    config.pPhaseTh = 0x0000;
+    config.qPhaseTh = 0x0000;
+    config.sPhaseTh = 0x0000;
+
     // Measurement calibration (V1.0 values)
-    // Format: [A_UGain, A_IGain, A_UOffset, A_IOffset, B_UGain, B_IGain, B_UOffset, B_IOffset, 
+    // Format: [A_UGain, A_IGain, A_UOffset, A_IOffset, B_UGain, B_IGain, B_UOffset, B_IOffset,
     //          C_UGain, C_IGain, C_UOffset, C_IOffset, N_IGain, N_IOffset, CSThree]
-    config.measCalRegs[0] = 7143;   // Phase A Voltage Gain
-    config.measCalRegs[1] = 45578;  // Phase A Current Gain
-    config.measCalRegs[2] = 0;      // Phase A Voltage Offset
-    config.measCalRegs[3] = 0;      // Phase A Current Offset
-    
-    config.measCalRegs[4] = 7171;   // Phase B Voltage Gain
-    config.measCalRegs[5] = 45578;  // Phase B Current Gain
-    config.measCalRegs[6] = 0;      // Phase B Voltage Offset
-    config.measCalRegs[7] = 0;      // Phase B Current Offset
-    
-    config.measCalRegs[8] = 7180;   // Phase C Voltage Gain
-    config.measCalRegs[9] = 45578;  // Phase C Current Gain
-    config.measCalRegs[10] = 0;     // Phase C Voltage Offset
-    config.measCalRegs[11] = 0;     // Phase C Current Offset
-    
-    config.measCalRegs[12] = 45578; // Neutral Current Gain
-    config.measCalRegs[13] = 0;     // Neutral Current Offset
-    config.measCalRegs[14] = 0;     // Checksum (calculated by driver)
-    
-    // Power calibration registers (default to zero, can be tuned)
-    for (int i = 0; i < 13; i++) {
-        config.calRegs[i] = 0;
-    }
-    
-    // Harmonic calibration registers (default to zero)
-    for (int i = 0; i < 7; i++) {
-        config.harCalRegs[i] = 0;
-    }
-    
-    Logger::getInstance().debug("CalibrationManager: Generated factory default calibration");
-    
+    //
+    // Voltage gains
+    const uint16_t vGain1 = 38800;  // VoltageGain1
+    const uint16_t vGain2 = 38500;  // VoltageGain2
+    const uint16_t vGain3 = 38800;  // VoltageGain3
+
+    // Current gains (CT1/CT2/CT3/Neutral)
+    const uint16_t iGainA = 45578;  // CurrentGainCT1
+    const uint16_t iGainB = 45578;  // CurrentGainCT2
+    const uint16_t iGainC = 45578;  // CurrentGainCT3
+    const uint16_t iGainN = 45578;  // CurrentGainCTN
+
+    // Phase A
+    config.measCalRegs[0] = vGain1;
+    config.measCalRegs[1] = iGainA;
+    config.measCalRegs[2] = 0;
+    config.measCalRegs[3] = 0;
+
+    // Phase B
+    config.measCalRegs[4] = vGain2;
+    config.measCalRegs[5] = iGainB;
+    config.measCalRegs[6] = 0;
+    config.measCalRegs[7] = 0;
+
+    // Phase C
+    config.measCalRegs[8]  = vGain3;
+    config.measCalRegs[9]  = iGainC;
+    config.measCalRegs[10] = 0;
+    config.measCalRegs[11] = 0;
+
+    // Neutral
+    config.measCalRegs[12] = iGainN;
+    config.measCalRegs[13] = 0;
+
+    // Checksum placeholder (not used by V2 wrapper)
+    config.measCalRegs[14] = 0;
+
+    Logger::getInstance().info("CalibrationManager: Using V1.0 factory defaults (ATM90E36)");
+
     return config;
 }

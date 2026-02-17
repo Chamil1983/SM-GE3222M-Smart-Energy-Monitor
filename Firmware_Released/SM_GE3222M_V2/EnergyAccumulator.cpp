@@ -1,6 +1,33 @@
 #include "EnergyAccumulator.h"
 #include <nvs_flash.h>
 
+// Preferences.begin() can fail on devices with corrupted NVS or unexpected partition state.
+// This helper attempts a single NVS repair (erase+init) and retries once.
+static bool beginPrefsSafe(Preferences& prefs, const char* ns, bool readOnly) {
+    if (prefs.begin(ns, readOnly)) {
+        return true;
+    }
+    Logger::getInstance().error("[NVS] Failed to open namespace '%s' (attempting NVS repair)", ns);
+
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK) {
+        Logger::getInstance().error("[NVS] nvs_flash_erase failed: %d", (int)err);
+        return false;
+    }
+    err = nvs_flash_init();
+    if (err != ESP_OK) {
+        Logger::getInstance().error("[NVS] nvs_flash_init after erase failed: %d", (int)err);
+        return false;
+    }
+    if (!prefs.begin(ns, readOnly)) {
+        Logger::getInstance().error("[NVS] Failed to open namespace '%s' after repair", ns);
+        return false;
+    }
+    Logger::getInstance().warn("[NVS] Namespace '%s' opened after repair", ns);
+    return true;
+}
+
+
 EnergyAccumulator::EnergyAccumulator()
     : m_initialized(false)
     , m_persistInterval(300)
@@ -92,7 +119,7 @@ void EnergyAccumulator::update(const MeterData& data) {
 }
 
 bool EnergyAccumulator::loadFromNVS() {
-    if (!m_preferences.begin(NVS_NAMESPACE, true)) {
+    if (!beginPrefsSafe(m_preferences, NVS_NAMESPACE, false)) {
         Logger::getInstance().error("EnergyAccumulator: Failed to open NVS namespace");
         return false;
     }
@@ -137,7 +164,7 @@ bool EnergyAccumulator::loadFromNVS() {
 }
 
 bool EnergyAccumulator::saveToNVS() {
-    if (!m_preferences.begin(NVS_NAMESPACE, false)) {
+    if (!beginPrefsSafe(m_preferences, NVS_NAMESPACE, false)) {
         Logger::getInstance().error("EnergyAccumulator: Failed to open NVS namespace for write");
         return false;
     }

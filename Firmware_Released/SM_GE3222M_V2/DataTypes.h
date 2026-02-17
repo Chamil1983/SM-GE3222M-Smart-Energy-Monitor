@@ -188,19 +188,28 @@ struct CalibrationConfig {
     
     // Initialize with default values
     CalibrationConfig() {
-        lineFreq = 0;  // 50Hz
-        pgaGain = 0;   // 1x
-        pmpga = 0;
-        pStartTh = 0x08BD;
-        qStartTh = 0x0AEC;
-        sStartTh = 0x0AEC;
-        pPhaseTh = 0x00D8;
-        qPhaseTh = 0x00D8;
-        sPhaseTh = 0x00D8;
-        
+        // Defaults aligned to SM_GE3222M V1.0 ATM90E36 init (3P4W, PGA=1x)
+        lineFreq = 0x1087;  // MMode0: 60Hz, 3P4W (V1.0 default comment)
+        pgaGain = 0x1500;   // MMode1: PGA gain (V1.0 comment, 1x by default)
+        pmpga = 0x0000;
+
+        // Thresholds - V1.0 sets to 0x0000
+        pStartTh = 0x0000;
+        qStartTh = 0x0000;
+        sStartTh = 0x0000;
+        pPhaseTh = 0x0000;
+        qPhaseTh = 0x0000;
+        sPhaseTh = 0x0000;
+
+        // Default calibration arrays are zeroed; real values should be loaded from NVS.
         memset(calRegs, 0, sizeof(calRegs));
         memset(harCalRegs, 0, sizeof(harCalRegs));
         memset(measCalRegs, 0, sizeof(measCalRegs));
+
+        // V1.0 sets Neutral current gain explicitly.
+        measCalRegs[12] = 0xFD7F;  // N_IGain (ATM90E36)
+        measCalRegs[13] = 0x0000;  // N_IOffset
+        measCalRegs[14] = 0x02F6;  // CSThree
     }
 };
 
@@ -221,22 +230,21 @@ struct WiFiConfig {
     uint8_t subnet[4];          // Subnet mask
     uint8_t dns1[4];            // Primary DNS
     uint8_t dns2[4];            // Secondary DNS
-    
     // AP Mode settings
-    char    apSSID[33];
-    char    apPassword[64];
-    uint8_t apChannel;
-    
+    char    apSsid[33];        // SoftAP SSID (max 32 chars + null)
+    char    apPassword[64];    // SoftAP Password (>=8 chars for WPA2)
+    char    apMac[18];         // SoftAP MAC as string (AA:BB:CC:DD:EE:FF)
+
     WiFiConfig() {
         enabled = true;
         apMode = false;
         useDHCP = true;
-        strcpy(ssid, "");
-        strcpy(password, "");
-        strcpy(hostname, "ge3222m");
-        strcpy(apSSID, "SM-GE3222M-Setup");
+        strcpy(ssid, ""); // STA SSID (set via NVS)
+        strcpy(password, ""); // STA password
+        strcpy(apSsid, "SM_GE3222M_Setup");
         strcpy(apPassword, "12345678");
-        apChannel = 1;
+        strcpy(apMac, "C8:2E:A3:F5:7D:DC");
+        strcpy(hostname, "ge3222m");
         memset(staticIP, 0, sizeof(staticIP));
         memset(gateway, 0, sizeof(gateway));
         memset(subnet, 0, sizeof(subnet));

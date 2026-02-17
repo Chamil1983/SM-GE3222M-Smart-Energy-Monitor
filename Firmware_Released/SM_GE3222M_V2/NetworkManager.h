@@ -26,7 +26,11 @@ public:
     void stop();
     
     bool isConnected() const;
+    // Mode helpers (used by WebServerManager and UI status)
+    bool isSTAMode() const;
+    bool isAPMode() const;
     String getLocalIP() const;
+    String getAPIP() const;
     int getRSSI() const;
     String getMACAddress() const;
     String getSSID() const;
@@ -51,6 +55,10 @@ private:
     bool _autoReconnect;
     bool _isSTAMode;
     bool _isAPMode;
+
+    // Connection state (prevents repeated esp_wifi_connect() calls while already connecting)
+    bool _connectInProgress;
+    unsigned long _connectStartMs;
     
     unsigned long _lastReconnectAttempt;
     uint16_t _reconnectDelay;

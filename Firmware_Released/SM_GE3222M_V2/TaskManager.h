@@ -2,7 +2,7 @@
  * @file TaskManager.h
  * @brief FreeRTOS task management for SM-GE3222M V2.0
  * 
- * Singleton pattern managing all 7 system tasks with proper core affinity,
+ * Singleton pattern managing system tasks with proper core affinity,
  * priorities, and stack sizes for ESP32 dual-core architecture.
  * 
  * Task Architecture:
@@ -13,7 +13,6 @@
  * 
  * Core 0 (Communications & Diagnostics):
  *   - TCPServerTask: Handle TCP data server (event-driven, P3)
- *   - WebServerTask: Handle WebSocket broadcasts (10ms, P2)
  *   - MQTTTask: Handle MQTT publishing (configurable, P2)
  *   - DiagnosticsTask: System monitoring, logging (5000ms, P1)
  */
@@ -32,6 +31,8 @@ public:
     static TaskManager& getInstance();
     
     bool createAllTasks();
+    bool isTCPServerTaskRunning() const { return _tcpServerTask != nullptr; }
+
     void stopAllTasks();
     
     bool isRunning() const { return _tasksRunning; }
@@ -40,7 +41,6 @@ public:
     TaskHandle_t getAccumulatorTaskHandle() const { return _accumulatorTask; }
     TaskHandle_t getModbusTaskHandle() const { return _modbusTask; }
     TaskHandle_t getTCPServerTaskHandle() const { return _tcpServerTask; }
-    TaskHandle_t getWebServerTaskHandle() const { return _webServerTask; }
     TaskHandle_t getMQTTTaskHandle() const { return _mqttTask; }
     TaskHandle_t getDiagnosticsTaskHandle() const { return _diagnosticsTask; }
     
@@ -54,7 +54,6 @@ private:
     static void accumulatorTaskFunc(void* param);
     static void modbusTaskFunc(void* param);
     static void tcpServerTaskFunc(void* param);
-    static void webServerTaskFunc(void* param);
     static void mqttTaskFunc(void* param);
     static void diagnosticsTaskFunc(void* param);
     
@@ -62,19 +61,20 @@ private:
     TaskHandle_t _accumulatorTask;
     TaskHandle_t _modbusTask;
     TaskHandle_t _tcpServerTask;
-    TaskHandle_t _webServerTask;
     TaskHandle_t _mqttTask;
     TaskHandle_t _diagnosticsTask;
     
     bool _tasksRunning;
+    bool _tcpTaskOptionalFailed;
+    // Web interface/task removed in this build.
+
     
     // Stack sizes (bytes)
     static constexpr uint32_t ENERGY_STACK_SIZE = 4096;
     static constexpr uint32_t ACCUMULATOR_STACK_SIZE = 4096;
     static constexpr uint32_t MODBUS_STACK_SIZE = 4096;
-    static constexpr uint32_t TCP_STACK_SIZE = 8192;
-    static constexpr uint32_t WEB_STACK_SIZE = 8192;
-    static constexpr uint32_t MQTT_STACK_SIZE = 4096;
+    static constexpr uint32_t TCP_STACK_SIZE = 4096;
+    static constexpr uint32_t MQTT_STACK_SIZE = 3072;
     static constexpr uint32_t DIAGNOSTICS_STACK_SIZE = 3072;
     
     // Task priorities (higher = more important)
@@ -82,7 +82,6 @@ private:
     static constexpr UBaseType_t ACCUMULATOR_PRIORITY = 4;
     static constexpr UBaseType_t MODBUS_PRIORITY = 3;
     static constexpr UBaseType_t TCP_PRIORITY = 3;
-    static constexpr UBaseType_t WEB_PRIORITY = 2;
     static constexpr UBaseType_t MQTT_PRIORITY = 2;
     static constexpr UBaseType_t DIAGNOSTICS_PRIORITY = 1;
     

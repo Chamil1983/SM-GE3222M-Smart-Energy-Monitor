@@ -9,6 +9,17 @@
 // CONFIGURATION REGISTERS (Page 0)
 // ============================================================================
 
+// Core enable / access control (V1.0)
+constexpr uint16_t REG_METER_EN          = 0x00;  // Meter enable (also used for reset key)
+constexpr uint16_t REG_SAG_PEAK_DET_CFG  = 0x05;  // Sag/Peak detector configuration
+constexpr uint16_t REG_CFG_REG_ACC_EN    = 0x7F;  // Register access enable (0x55AA)
+
+// EMM interrupt control (V1.0 recommended)
+constexpr uint16_t REG_EMM_INT_STATE0    = 0x73;  // EMM interrupt status 0
+constexpr uint16_t REG_EMM_INT_STATE1    = 0x74;  // EMM interrupt status 1
+constexpr uint16_t REG_EMM_INT_EN0       = 0x75;  // EMM interrupt enable 0
+constexpr uint16_t REG_EMM_INT_EN1       = 0x76;  // EMM interrupt enable 1
+
 // Configuration Start & Checksums
 constexpr uint16_t REG_CONFIG_START     = 0x30;  // Configuration Start (0x5678)
 constexpr uint16_t REG_PL_CONST_H       = 0x31;  // High Word of PL_Constant
@@ -197,51 +208,55 @@ constexpr uint16_t REG_Q_MEAN_A_LSB     = 0xC5;  // Phase A Reactive Power LSB
 constexpr uint16_t REG_Q_MEAN_B_LSB     = 0xC6;  // Phase B Reactive Power LSB
 constexpr uint16_t REG_Q_MEAN_C_LSB     = 0xC7;  // Phase C Reactive Power LSB
 
+// Apparent Power LSB (matches V1.0 EnergyATM90E36.h Smean*LSB addresses)
+constexpr uint16_t REG_S_MEAN_T_LSB     = 0xC8;  // Total Apparent Power LSB
+constexpr uint16_t REG_S_MEAN_A_LSB     = 0xC9;  // Phase A Apparent Power LSB
+constexpr uint16_t REG_S_MEAN_B_LSB     = 0xCA;  // Phase B Apparent Power LSB
+constexpr uint16_t REG_S_MEAN_C_LSB     = 0xCB;  // Phase C Apparent Power LSB
+
 // ============================================================================
-// FUNDAMENTAL POWER & POWER FACTOR REGISTERS
+// FUNDAMENTAL / HARMONIC POWER REGISTERS
+// (Align with V1.0 register map; included for completeness, currently unused)
 // ============================================================================
-constexpr uint16_t REG_P_MEAN_TF        = 0xC8;  // Total Mean Fundamental Active Power
-constexpr uint16_t REG_P_MEAN_AF        = 0xC9;  // Phase A Fundamental Active Power
-constexpr uint16_t REG_P_MEAN_BF        = 0xCA;  // Phase B Fundamental Active Power
-constexpr uint16_t REG_P_MEAN_CF        = 0xCB;  // Phase C Fundamental Active Power
-constexpr uint16_t REG_PF_MEAN_TF       = 0xCC;  // Total Fundamental Power Factor
-constexpr uint16_t REG_PF_MEAN_AF       = 0xCD;  // Phase A Fundamental Power Factor
-constexpr uint16_t REG_PF_MEAN_BF       = 0xCE;  // Phase B Fundamental Power Factor
-constexpr uint16_t REG_PF_MEAN_CF       = 0xCF;  // Phase C Fundamental Power Factor
+constexpr uint16_t REG_P_MEAN_TF        = 0xD0;  // Total Fundamental Active Power
+constexpr uint16_t REG_P_MEAN_AF        = 0xD1;  // Phase A Fundamental Active Power
+constexpr uint16_t REG_P_MEAN_BF        = 0xD2;  // Phase B Fundamental Active Power
+constexpr uint16_t REG_P_MEAN_CF        = 0xD3;  // Phase C Fundamental Active Power
+constexpr uint16_t REG_P_MEAN_TH        = 0xD4;  // Total Harmonic Active Power
+constexpr uint16_t REG_P_MEAN_AH        = 0xD5;  // Phase A Harmonic Active Power
+constexpr uint16_t REG_P_MEAN_BH        = 0xD6;  // Phase B Harmonic Active Power
+constexpr uint16_t REG_P_MEAN_CH        = 0xD7;  // Phase C Harmonic Active Power
 
 // ============================================================================
 // VOLTAGE & CURRENT RMS REGISTERS
 // ============================================================================
-constexpr uint16_t REG_U_RMS_A          = 0xD0;  // Phase A Voltage RMS
-constexpr uint16_t REG_U_RMS_B          = 0xD1;  // Phase B Voltage RMS
-constexpr uint16_t REG_U_RMS_C          = 0xD2;  // Phase C Voltage RMS
-constexpr uint16_t REG_I_RMS_N          = 0xD3;  // Neutral Current RMS
-constexpr uint16_t REG_I_RMS_A          = 0xD4;  // Phase A Current RMS
-constexpr uint16_t REG_I_RMS_B          = 0xD5;  // Phase B Current RMS
-constexpr uint16_t REG_I_RMS_C          = 0xD6;  // Phase C Current RMS
+constexpr uint16_t REG_U_RMS_A          = 0xD9;  // Phase A Voltage RMS
+constexpr uint16_t REG_U_RMS_B          = 0xDA;  // Phase B Voltage RMS
+constexpr uint16_t REG_U_RMS_C          = 0xDB;  // Phase C Voltage RMS
+constexpr uint16_t REG_I_RMS_N          = 0xDC;  // Neutral Current RMS
+constexpr uint16_t REG_I_RMS_A          = 0xDD;  // Phase A Current RMS
+constexpr uint16_t REG_I_RMS_B          = 0xDE;  // Phase B Current RMS
+constexpr uint16_t REG_I_RMS_C          = 0xDF;  // Phase C Current RMS
 
 // ============================================================================
-// THD & PHASE ANGLE REGISTERS
+// THD+N, PHASE ANGLE, PEAK & TEMP REGISTERS (ATM90E36)
+// (Align with V1.0 EnergyATM90E36.h)
 // ============================================================================
-constexpr uint16_t REG_THD_NU_A         = 0xD8;  // Phase A Voltage THD
-constexpr uint16_t REG_THD_NU_B         = 0xD9;  // Phase B Voltage THD
-constexpr uint16_t REG_THD_NU_C         = 0xDA;  // Phase C Voltage THD
-constexpr uint16_t REG_THD_NI_A         = 0xDC;  // Phase A Current THD
-constexpr uint16_t REG_THD_NI_B         = 0xDD;  // Phase B Current THD
-constexpr uint16_t REG_THD_NI_C         = 0xDE;  // Phase C Current THD
+constexpr uint16_t REG_THD_NU_A         = 0xF1;  // Phase A Voltage THD+N
+constexpr uint16_t REG_THD_NU_B         = 0xF2;  // Phase B Voltage THD+N
+constexpr uint16_t REG_THD_NU_C         = 0xF3;  // Phase C Voltage THD+N
+constexpr uint16_t REG_THD_NI_A         = 0xF5;  // Phase A Current THD+N
+constexpr uint16_t REG_THD_NI_B         = 0xF6;  // Phase B Current THD+N
+constexpr uint16_t REG_THD_NI_C         = 0xF7;  // Phase C Current THD+N
 
-constexpr uint16_t REG_P_ANGLE_A        = 0xE0;  // Phase A Mean Phase Angle
-constexpr uint16_t REG_P_ANGLE_B        = 0xE1;  // Phase B Mean Phase Angle
-constexpr uint16_t REG_P_ANGLE_C        = 0xE2;  // Phase C Mean Phase Angle
-constexpr uint16_t REG_U_ANGLE_A        = 0xE4;  // Phase A Voltage Phase Angle
-constexpr uint16_t REG_U_ANGLE_B        = 0xE5;  // Phase B Voltage Phase Angle
-constexpr uint16_t REG_U_ANGLE_C        = 0xE6;  // Phase C Voltage Phase Angle
-
-// ============================================================================
-// FREQUENCY & TEMPERATURE REGISTERS
-// ============================================================================
-constexpr uint16_t REG_FREQUENCY        = 0xE8;  // Line Frequency
-constexpr uint16_t REG_TEMPERATURE      = 0xE9;  // Internal Die Temperature
+constexpr uint16_t REG_FREQUENCY        = 0xF8;  // Line Frequency
+constexpr uint16_t REG_P_ANGLE_A        = 0xF9;  // Phase A Mean Phase Angle
+constexpr uint16_t REG_P_ANGLE_B        = 0xFA;  // Phase B Mean Phase Angle
+constexpr uint16_t REG_P_ANGLE_C        = 0xFB;  // Phase C Mean Phase Angle
+constexpr uint16_t REG_TEMPERATURE      = 0xFC;  // Measured Temperature
+constexpr uint16_t REG_U_ANGLE_A        = 0xFD;  // Phase A Voltage Phase Angle
+constexpr uint16_t REG_U_ANGLE_B        = 0xFE;  // Phase B Voltage Phase Angle
+constexpr uint16_t REG_U_ANGLE_C        = 0xFF;  // Phase C Voltage Phase Angle
 
 // ============================================================================
 // CALIBRATION CONSTANTS
@@ -249,6 +264,9 @@ constexpr uint16_t REG_TEMPERATURE      = 0xE9;  // Internal Die Temperature
 constexpr uint16_t CAL_CONFIG_START     = 0x5678;  // Configuration start magic
 constexpr uint16_t CONFIG_END_MAGIC     = 0x8765;  // Configuration end magic (latch checksum)
 constexpr uint16_t CAL_CS_ZERO          = 0x4741;  // CS0 expected value
+constexpr uint16_t CAL_CS_ONE           = 0x0000;  // CS1 expected value (V1.0 driver)
+constexpr uint16_t CAL_CS_TWO           = 0x0000;  // CS2 expected value (V1.0 driver)
+constexpr uint16_t CAL_CS_THREE         = 0x02F6;  // CS3 expected value (V1.0 driver)
 
 // Default PLconstant for 50Hz, 1000 pulses/kWh
 constexpr uint16_t DEFAULT_PL_CONST_H   = 0x0861;

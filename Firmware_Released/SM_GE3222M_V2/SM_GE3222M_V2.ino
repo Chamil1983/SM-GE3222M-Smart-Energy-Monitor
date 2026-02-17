@@ -17,6 +17,7 @@
 #include <Wire.h>
 #include <SPIFFS.h>
 #include <Preferences.h>
+#include <nvs_flash.h>
 #include <DHT.h>
 #include <ESPmDNS.h>
 
@@ -57,7 +58,7 @@
 // Communication modules
 #include "TCPDataServer.h"
 #include "ProtocolV2.h"
-#include "WebServerManager.h"
+// Web interface removed (no HTTP/REST/WebSocket/SPIFFS UI)
 #include "ModbusServer.h"
 #include "MQTTPublisher.h"
 
@@ -76,6 +77,15 @@
 static bool g_bootComplete = false;
 static ErrorCode g_lastError = ErrorCode::NONE;
 static uint32_t g_bootStartTime = 0;
+
+// Optional compile-time STA fallback credentials.
+// Leave empty to require credentials from ConfigManager (NVS).
+#ifndef FALLBACK_STA_SSID
+#define FALLBACK_STA_SSID ""
+#endif
+#ifndef FALLBACK_STA_PASSWORD
+#define FALLBACK_STA_PASSWORD ""
+#endif
 
 // ============================================================================
 // BOOT PHASE HELPERS
@@ -101,6 +111,19 @@ void printBootStep(const char* step, bool success = true) {
     }
 }
 
+
+
+/**
+ * Print optional boot step (does not mark boot as failed)
+ */
+void printBootOptionalStep(const char* step, bool running) {
+    Serial.printf("  [%s] %s\n", running ? "OK" : "SKIP", step);
+    if (!running) {
+        Serial.println("  NOTE: Optional component not running (fallback servicing enabled)");
+    }
+}
+
+
 // Backward-compatible helper used throughout this sketch.
 inline void checkBootStep(const char* step, bool success = true) {
     printBootStep(step, success);
@@ -112,12 +135,9 @@ inline void checkBootStep(const char* step, bool success = true) {
 bool checkBootStatus(const char* step, bool success) {
     printBootStep(step, success);
     if (!success) {
-        Serial.println("\n*** SYSTEM HALT ***");
-        Serial.printf("Failed at: %s\n", step);
-        while(1) {
-            delay(1000);
-            digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN)); // Blink error
-        }
+        Serial.println("\n*** BOOT WARNING ***");
+        Serial.printf("Non-fatal boot issue at: %s\n", step);
+        // Do NOT halt; keep system alive for diagnostics and allow fallback servicing in loop().
     }
     return success;
 }
@@ -182,10 +202,23 @@ bool initPhase1_HAL() {
 }
 
 // ============================================================================
+
 // PHASE 2: STORAGE INITIALIZATION
 // ============================================================================
 bool initPhase2_Storage() {
     printBootPhase("2", "Storage & Configuration Loading");
+    // Initialize NVS (required for Preferences / ConfigManager).
+    // On first boot or after partition changes, NVS can be in an uninitialized state.
+    bool nvsOk = true;
+    esp_err_t nvsErr = nvs_flash_init();
+    if (nvsErr == ESP_ERR_NVS_NO_FREE_PAGES || nvsErr == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvsErr = nvs_flash_init();
+    }
+    nvsOk = (nvsErr == ESP_OK);
+    checkBootStep("NVS Init", nvsOk);
+    // Do not hard-fail boot here; continue so web/VB diagnostics are still reachable.
+
     
     // Initialize SPIFFS
     if (!SPIFFSManager::getInstance().init(true)) {
@@ -225,9 +258,17 @@ bool initPhase2_Storage() {
     
     // Initialize Data Logger
     // Initialize Data Logger with a safe default (avoid heap exhaustion when PSRAM is not present)
-    size_t logEntries = psramFound() ? 1000 : 200;
+    size_t logEntries = psramFound() ? 400 : 200;
     bool dlOk = DataLogger::getInstance().init((uint16_t)logEntries);
     { String _step = String("Data Logger Init (") + String(logEntries) + String(" entries)"); checkBootStep(_step.c_str(), dlOk); }
+
+if (!dlOk && logEntries > 200) {
+    Logger::getInstance().warn("DataLogger: Allocation failed for %d entries, retrying with 200", logEntries);
+    logEntries = 200;
+    dlOk = DataLogger::getInstance().init((uint16_t)logEntries);
+    { String _step2 = String("Data Logger Init Retry (") + String(logEntries) + String(" entries)"); checkBootStep(_step2.c_str(), dlOk); }
+}
+
 
     
     return true;
@@ -275,10 +316,24 @@ bool initPhase3_EnergyMetering() {
     // Perform initial read
     if (EnergyMeter::getInstance().update()) {
         MeterData data = EnergyMeter::getInstance().getSnapshot();
-        Serial.printf("  Initial Read: VA=%.1fV IA=%.2fA PA=%.1fW F=%.2fHz\n",
-                      data.phaseA.voltageRMS, data.phaseA.currentRMS,
-                      data.phaseA.activePower, data.frequency);
-    } else {
+        Serial.printf("  Initial Read (3-Phase):\n");
+Serial.printf("    A: V=%.2fV I=%.3fA P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f\n",
+              data.phaseA.voltageRMS, data.phaseA.currentRMS,
+              data.phaseA.activePower, data.phaseA.reactivePower,
+              data.phaseA.apparentPower, data.phaseA.powerFactor);
+Serial.printf("    B: V=%.2fV I=%.3fA P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f\n",
+              data.phaseB.voltageRMS, data.phaseB.currentRMS,
+              data.phaseB.activePower, data.phaseB.reactivePower,
+              data.phaseB.apparentPower, data.phaseB.powerFactor);
+Serial.printf("    C: V=%.2fV I=%.3fA P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f\n",
+              data.phaseC.voltageRMS, data.phaseC.currentRMS,
+              data.phaseC.activePower, data.phaseC.reactivePower,
+              data.phaseC.apparentPower, data.phaseC.powerFactor);
+Serial.printf("    Totals: P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f F=%.2fHz\n",
+              data.totalActivePower, data.totalReactivePower,
+              data.totalApparentPower, data.totalPowerFactor,
+              data.frequency);
+} else {
         Serial.println("  WARNING: Initial meter read failed");
     }
     
@@ -299,15 +354,66 @@ bool initPhase4_Network() {
     }
     checkBootStep("Network Manager Init", true);
     
-    // Connect to WiFi (non-blocking)
-    if (wifiConfig.apMode) {
-        SMNetworkManager::getInstance().startAP(wifiConfig.apSSID, wifiConfig.apPassword);
-        Serial.printf("  AP Mode: %s (IP will be assigned)\n", wifiConfig.apSSID);
-    } else {
-        SMNetworkManager::getInstance().startSTA();
-        Serial.printf("  STA Mode: Connecting to %s...\n", wifiConfig.ssid);
+
+    // Phase 4 WiFi stability plan:
+    //  - startAP()  is AP-only and stable (no mode switching after it starts)
+    //  - startSTA() is STA-only (no management AP)
+    //  - Boot logic: AP-only requested -> start AP-only
+    //               else try STA; if STA fails -> fall back to AP-only (channel 1..11)
+    bool wifiOk = false;
+
+    // Prefer DHCP for STA (more robust for most field networks)
+    wifiConfig.useDHCP = true;
+
+    // If NVS has no SSID but a compile-time fallback is set, use it.
+    if (strlen(wifiConfig.ssid) == 0 && (sizeof(FALLBACK_STA_SSID) > 1)) {
+        strncpy(wifiConfig.ssid, FALLBACK_STA_SSID, sizeof(wifiConfig.ssid) - 1);
+        wifiConfig.ssid[sizeof(wifiConfig.ssid) - 1] = '\0';
+        strncpy(wifiConfig.password, FALLBACK_STA_PASSWORD, sizeof(wifiConfig.password) - 1);
+        wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
+        Serial.printf("  INFO: Using compile-time fallback SSID: %s\n", wifiConfig.ssid);
     }
-    checkBootStep("WiFi Started", true);
+
+    const char* apSSID = wifiConfig.apSsid;
+    const char* apPASS = wifiConfig.apPassword;
+
+    if (wifiConfig.apMode) {
+        // Explicit AP-only requested
+        wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
+        Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
+    } else if (strlen(wifiConfig.ssid) > 0) {
+        // Try STA-only first
+        Serial.printf("  STA-only Mode: Connecting to %s (DHCP)...\n", wifiConfig.ssid);
+        delay(150);
+        wifiOk = SMNetworkManager::getInstance().startSTA();
+
+        // Wait for STA connect (bounded)
+        const uint32_t t0 = millis();
+        const uint32_t timeoutMs = 15000;
+        while (wifiOk && !SMNetworkManager::getInstance().isConnected() && (millis() - t0) < timeoutMs) {
+            delay(200);
+            yield();
+        }
+
+        if (wifiOk && SMNetworkManager::getInstance().isConnected()) {
+            Serial.printf("  STA Connected: IP=%s RSSI=%ddBm\n",
+                          SMNetworkManager::getInstance().getLocalIP().c_str(),
+                          SMNetworkManager::getInstance().getRSSI());
+        } else {
+            // STA failed -> stable AP-only fallback
+            Serial.println("  WARNING: STA connect failed, falling back to AP-only...");
+            SMNetworkManager::getInstance().stop();
+            wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
+            Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
+        }
+    } else {
+        // No SSID configured -> AP-only fallback
+        Serial.println("  INFO: No STA SSID configured, starting AP-only...");
+        wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
+        Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
+    }
+
+    checkBootStep("WiFi Started", wifiOk);
     
     // Initialize mDNS
     NetworkConfig netConfig;
@@ -315,8 +421,8 @@ bool initPhase4_Network() {
     if (netConfig.mdnsEnabled) {
         // Use WiFi hostname as the mDNS hostname.
         if (MDNS.begin(wifiConfig.hostname)) {
-            MDNS.addService("http", "tcp", 80);
-            MDNS.addService("modbus", "tcp", 502);
+            // No HTTP server in this build; advertise only generic TCP service(s)
+            MDNS.addService("tcpdata", "tcp", 8088);
             checkBootStep("mDNS Started", true);
         }
     }
@@ -344,30 +450,20 @@ bool initPhase5_Communications() {
     checkBootStep("TCP Data Server (port 8088)", tcpOk);
 
     
-    // Initialize Web Server (socket-based WebServer; WebSocket streaming disabled)
-    bool webOk = WebServerManager::getInstance().begin(80);
-    if (!webOk) {
-        Serial.println("  WARNING: Web Server init failed");
-    }
-    checkBootStep("Web Server (port 80)", webOk);
-    checkBootStep("REST API (/api/*)", webOk);
-    checkBootStep("WebSocket (/ws) (disabled)", false);
+    // Web interface intentionally removed in this build.
+    // WiFi is still available for future BACnet/TCP/IP transport and OTA (if enabled).
 
-    
-    // Initialize Modbus Server
-    ModbusConfig modbusConfig;
-    ConfigManager::getInstance().loadModbusConfig(modbusConfig);
-    if (!ModbusServer::getInstance().begin(modbusConfig)) {
-        Serial.println("  WARNING: Modbus init failed");
-    }
-    if (modbusConfig.rtuEnabled) {
-        checkBootStep("Modbus RTU (Serial2, baud configured)", true);
-    }
-    if (modbusConfig.tcpEnabled) {
-        checkBootStep("Modbus TCP (port 502)", true);
-    }
-    
-    // Initialize MQTT Publisher
+    // Initialize Modbus Server (RTU ONLY - TCP disabled by requirement)
+ModbusConfig modbusConfig;
+ConfigManager::getInstance().loadModbusConfig(modbusConfig);
+modbusConfig.tcpEnabled = false; // enforce RTU-only
+if (!ModbusServer::getInstance().begin(modbusConfig)) {
+    Serial.println("  WARNING: Modbus init failed");
+}
+if (modbusConfig.rtuEnabled) {
+    checkBootStep("Modbus RTU (Serial2, baud configured)", true);
+}
+// Initialize MQTT Publisher
     MQTTConfig mqttConfig;
     ConfigManager::getInstance().loadMQTTConfig(mqttConfig);
     if (mqttConfig.enabled) {
@@ -412,10 +508,10 @@ bool initPhase6_Tasks() {
     checkBootStep("EnergyTask (Core 1, Priority 5, 500ms)", true);
     checkBootStep("AccumulatorTask (Core 1, Priority 4, 1000ms)", true);
     checkBootStep("ModbusTask (Core 1, Priority 3, 10ms poll)", true);
-    checkBootStep("TCPServerTask (Core 0, Priority 3, event-driven)", true);
-    checkBootStep("WebServerTask (Core 0, Priority 2, 10ms)", true);
-    checkBootStep("MQTTTask (Core 0, Priority 2, configurable)", true);
-    checkBootStep("DiagnosticsTask (Core 0, Priority 1, 5000ms)", true);
+    printBootOptionalStep("TCPServerTask (Core 0, Priority 3, event-driven)", TaskManager::getInstance().isTCPServerTaskRunning());
+    // WebServerTask removed
+    printBootOptionalStep("MQTTTask (Core 0, Priority 2, configurable)", TaskManager::getInstance().getMQTTTaskHandle() != nullptr);
+    printBootOptionalStep("DiagnosticsTask (Core 0, Priority 1, 5000ms)", TaskManager::getInstance().getDiagnosticsTaskHandle() != nullptr);
     
     return true;
 }
@@ -491,9 +587,17 @@ void loop() {
     
     // Handle network manager (reconnection logic)
     SMNetworkManager::getInstance().handle();
+
+    // Fallback servicing: if optional protocol tasks could not be created due to low heap,
+    // service them here in the Arduino loop (prevents boot failure / watchdog resets).
+    if (!TaskManager::getInstance().isTCPServerTaskRunning()) {
+        TCPDataServer::getInstance().handle();
+    }
     
-    // Feed watchdog
-    WatchdogManager::getInstance().feed();
+    // Note: Task Watchdog is fed by subscribed FreeRTOS tasks.
+    // Calling esp_task_wdt_reset() from loopTask when it isn't registered produces
+    // "task not found" spam and can stall the UI/menu.
+    // So we do NOT feed the watchdog from loop().
     
     // Small delay to prevent watchdog issues
     delay(10);

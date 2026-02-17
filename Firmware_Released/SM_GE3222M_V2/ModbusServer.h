@@ -5,6 +5,7 @@
  * Consolidates Modbus Serial (RTU) and Modbus TCP functionality from V1.0
  * into a single, unified implementation using singleton pattern.
  * Supports IEEE754 float encoding for meter data.
+ * NOTE: Modbus TCP is disabled in this firmware (RTU-only).
  */
 
 #ifndef MODBUSSERVER_H

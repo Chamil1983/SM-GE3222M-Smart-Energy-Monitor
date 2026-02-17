@@ -81,6 +81,9 @@ public:
      */
     bool isInitialized() const { return m_initialized; }
 
+    // Reinitialize the SPI bus pins/state (useful if another component changed SPI configuration)
+    void reinit();
+
 private:
     // Singleton - prevent copying
     SPIBus();

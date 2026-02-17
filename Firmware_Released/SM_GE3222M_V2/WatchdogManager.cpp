@@ -14,8 +14,10 @@ WatchdogManager& WatchdogManager::getInstance() {
     return instance;
 }
 
-WatchdogManager::WatchdogManager() 
-    : _enabled(false)
+WatchdogManager::WatchdogManager()
+    : _subscribedTasks{nullptr}
+    , _subscribedCount(0)
+    , _enabled(false)
     , _initialized(false)
     , _ownsTwdt(false)
     , _timeoutSeconds(30)
@@ -56,22 +58,19 @@ bool WatchdogManager::init(uint32_t timeoutSeconds) {
         return false;
     }
     
-    // Subscribe main loop task (current task)
-    _mainTaskHandle = xTaskGetCurrentTaskHandle();
-    err = esp_task_wdt_add(_mainTaskHandle);
-    if (err != ESP_OK) {
-        Logger::getInstance().error("WatchdogManager: Failed to add main task (err=%d)", err);
-        if (_ownsTwdt) {
-            esp_task_wdt_deinit();
-        }
-        return false;
-    }
     
+
+    // Note: If TWDT was already initialized by the Arduino core, we do NOT try to delete
+    // loopTask from TWDT here because:
+    //  - loopTask may not be registered (causes noisy "task not found" logs)
+    //  - removing it is not required for stability in our design
+    // We instead ensure that we only "feed" TWDT from tasks that we have subscribed.
+
     _enabled = true;
     _initialized = true;
-    
+
     Logger::getInstance().info("WatchdogManager: Initialized (timeout=%us)", _timeoutSeconds);
-    
+
     return true;
 }
 
@@ -79,10 +78,19 @@ void WatchdogManager::feed() {
     if (!_enabled || !_initialized) {
         return;
     }
-    
+
+    // Only reset TWDT from a task that is actually subscribed.
+    TaskHandle_t cur = xTaskGetCurrentTaskHandle();
+    if (!isTaskSubscribed(cur)) {
+        return; // don't spam logs or stall the firmware
+    }
+
     esp_err_t err = esp_task_wdt_reset();
     if (err != ESP_OK) {
-        Logger::getInstance().warn("WatchdogManager: Feed failed (err=%d)", err);
+        // ESP_ERR_NOT_FOUND happens if the current task isn't registered; avoid log spam.
+        if (err != ESP_ERR_NOT_FOUND) {
+            Logger::getInstance().warn("WatchdogManager: Feed failed (err=%d)", err);
+        }
     }
 }
 
@@ -103,6 +111,8 @@ bool WatchdogManager::subscribeTask(TaskHandle_t taskHandle, const char* taskNam
                                    taskName ? taskName : "unknown", err);
         return false;
     }
+
+    addSubscribed(taskHandle);
     
     Logger::getInstance().info("WatchdogManager: Subscribed task %s", 
                               taskName ? taskName : "unknown");
@@ -123,8 +133,40 @@ bool WatchdogManager::unsubscribeTask(TaskHandle_t taskHandle) {
         Logger::getInstance().warn("WatchdogManager: Failed to unsubscribe task (err=%d)", err);
         return false;
     }
+
+    removeSubscribed(taskHandle);
     
     return true;
+}
+
+bool WatchdogManager::isTaskSubscribed(TaskHandle_t h) const {
+    if (h == nullptr) return false;
+    for (int i = 0; i < _subscribedCount; ++i) {
+        if (_subscribedTasks[i] == h) return true;
+    }
+    return false;
+}
+
+void WatchdogManager::addSubscribed(TaskHandle_t h) {
+    if (h == nullptr) return;
+    if (isTaskSubscribed(h)) return;
+    if (_subscribedCount >= MAX_WDT_TASKS) return;
+    _subscribedTasks[_subscribedCount++] = h;
+}
+
+void WatchdogManager::removeSubscribed(TaskHandle_t h) {
+    if (h == nullptr) return;
+    for (int i = 0; i < _subscribedCount; ++i) {
+        if (_subscribedTasks[i] == h) {
+            // compact
+            for (int j = i; j < _subscribedCount - 1; ++j) {
+                _subscribedTasks[j] = _subscribedTasks[j + 1];
+            }
+            _subscribedTasks[_subscribedCount - 1] = nullptr;
+            _subscribedCount--;
+            return;
+        }
+    }
 }
 
 void WatchdogManager::panicHandler() {

@@ -1,613 +1,267 @@
-/**
- * SM-GE3222M V2.0 - ATM90E36 Energy IC Driver
- * 
- * Complete port of V1.0 EnergyATM90E36.cpp (~800 lines)
- * Modernized with:
- * - Singleton pattern
- * - SPIBus::getInstance() for thread-safe SPI
- * - Logger for diagnostics
- * - RegisterMap.h for all addresses
- * - DataTypes.h structures
- */
-
 #include "ATM90E36Driver.h"
-#include "SPIBus.h"
-#include "Logger.h"
+
+#include "EnergyATM90E36.h"   // V1.0 proven driver
 #include "PinMap.h"
-#include <Arduino.h>
-#include <cmath>
+#include "RegisterMap.h"
+#include "Logger.h"
 
-// SPI protocol constants
-#define SPI_READ  1
-#define SPI_WRITE 0
+#include <SPI.h>
 
-// ============================================================================
-// CONSTRUCTOR & SINGLETON
-// ============================================================================
+// In EnergyATM90E36.h:
+//   READ  = 1
+//   WRITE = 0
+// and register symbols like UrmsA, IrmsA, Freq, SysStatus0, SysStatus1 are defined.
 
 ATM90E36Driver::ATM90E36Driver()
     : m_initialized(false)
     , m_lastError(ErrorCode::NONE)
-    , m_lastReadTime(0)
-    , m_csZero(0)
-    , m_csOne(0)
-    , m_csTwo(0)
-    , m_csThree(0)
-{
+    , m_ic(nullptr) {
 }
-
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
 
 bool ATM90E36Driver::init(const CalibrationConfig& config) {
     Logger& logger = Logger::getInstance();
-    logger.info("ATM90E36: Initializing...");
+    logger.info("ATM90E36: Init (V1 driver wrapper)");
 
-    // Ensure CS line is configured (prevents 0xFFFF reads)
+    // Ensure CS is a defined output and deasserted before SPI transactions.
     pinMode(PIN_SPI_CS_ATM90E36, OUTPUT);
     digitalWrite(PIN_SPI_CS_ATM90E36, HIGH);
-    
-    m_calibration = config;
-    
-    // Soft reset
-    if (!softReset()) {
-        m_lastError = ErrorCode::ATM_INIT_FAILED;
-        logger.error("ATM90E36: Soft reset failed");
-        return false;
-    }
-    
-    delay(100);
-    
-    // Apply calibration sequence
-    if (!applyCalibration(config)) {
-        m_lastError = ErrorCode::ATM_CALIBRATION_ERROR;
-        logger.error("ATM90E36: Calibration failed");
-        return false;
-    }
-    
-    delay(100);
-    
-    // Verify checksums (non-fatal: allow SAFE MODE boot and later retry)
-    if (!verifyChecksums()) {
-        m_lastError = ErrorCode::ATM_CHECKSUM_FAILED;
-        logger.warn("ATM90E36: Checksum verification failed (continuing)");
-    } else {
-        logger.info("ATM90E36: Checksum verification OK");
+    delay(5);
+
+    // Ensure SPI pins are explicitly configured for this board.
+    // (V1 driver calls SPI.begin() without pins; on ESP32 that is usually OK,
+    //  but being explicit improves portability across variants.)
+    SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SPI_CS_ATM90E36);
+
+    if (!m_ic) {
+        m_ic = new ATM90E3x(PIN_SPI_CS_ATM90E36);
     }
 
+    // Map CalibrationConfig -> V1 begin() parameters.
+    // V1 expects: lineFreq, pgagain, ugain1, ugain2, ugain3, igainA, igainB, igainC, igainN
+    const uint16_t ugain1 = config.measCalRegs[0];
+    const uint16_t igainA = config.measCalRegs[1];
+    const uint16_t ugain2 = config.measCalRegs[4];
+    const uint16_t igainB = config.measCalRegs[5];
+    const uint16_t ugain3 = config.measCalRegs[8];
+    const uint16_t igainC = config.measCalRegs[9];
+    const uint16_t igainN = config.measCalRegs[12];
 
-// Enable metering functions (required for valid RMS/power reads)
-// V1 firmware enables all features after config+calibration sections are latched.
-writeRegister(REG_FUNC_EN0, 0xFFFF);
-writeRegister(REG_FUNC_EN1, 0xFFFF);
-delay(10);
+    auto logRawProof = [&](const char* tag) {
+        const uint16_t rawU = m_ic->CommEnergyIC(READ, UrmsA, 0x0000);
+        const uint16_t rawI = m_ic->CommEnergyIC(READ, IrmsA, 0x0000);
+        const uint16_t rawF = m_ic->CommEnergyIC(READ, Freq,  0x0000);
+        const uint16_t sys0 = m_ic->CommEnergyIC(READ, SysStatus0, 0x0000);
+        const uint16_t sys1 = m_ic->CommEnergyIC(READ, SysStatus1, 0x0000);
+        const uint16_t cfg  = m_ic->CommEnergyIC(READ, REG_CFG_REG_ACC_EN, 0x0000);
+        const uint16_t men  = m_ic->CommEnergyIC(READ, REG_METER_EN, 0x0000);
 
-    m_initialized = true;
-    logger.info("ATM90E36: Initialization complete");
-    return true;
-}
-
-bool ATM90E36Driver::softReset() {
-    Logger& logger = Logger::getInstance();
-    logger.debug("ATM90E36: Performing soft reset");
-    
-    // Write soft reset value
-    if (!writeRegister(REG_SOFT_RESET, 0x789A)) {
-        return false;
-    }
-    
-    delay(200);
-    return true;
-}
-
-// ============================================================================
-// CALIBRATION
-// ============================================================================
-
-bool ATM90E36Driver::applyCalibration(const CalibrationConfig& config) {
-    Logger& logger = Logger::getInstance();
-    logger.info("ATM90E36: Applying calibration");
-    // Function enable registers
-    writeRegister(REG_FUNC_EN0, 0x0000);
-    writeRegister(REG_FUNC_EN1, 0x0000);
-    writeRegister(REG_SAG_TH, 0x0001);
-    
-    // *** PHASE 1: CONFIGURATION REGISTERS (ConfigStart) ***
-    logger.debug("ATM90E36: Writing configuration registers");
-    writeRegister(REG_CONFIG_START, CAL_CONFIG_START);  // 0x5678
-    writeRegister(REG_PL_CONST_H, DEFAULT_PL_CONST_H);  // 0x0861
-    writeRegister(REG_PL_CONST_L, DEFAULT_PL_CONST_L);  // 0xC468
-    writeRegister(REG_MMODE0, config.lineFreq);
-    writeRegister(REG_MMODE1, config.pgaGain);
-    writeRegister(REG_P_START_TH, config.pStartTh);
-    writeRegister(REG_Q_START_TH, config.qStartTh);
-    writeRegister(REG_S_START_TH, config.sStartTh);
-    writeRegister(REG_P_PHASE_TH, config.pPhaseTh);
-    writeRegister(REG_Q_PHASE_TH, config.qPhaseTh);
-    writeRegister(REG_S_PHASE_TH, config.sPhaseTh);
-    
-    // Calculate and write CS0
-    uint16_t csCalc[11] = {
-        DEFAULT_PL_CONST_H, DEFAULT_PL_CONST_L,
-        config.lineFreq, config.pgaGain,
-        config.pStartTh, config.qStartTh, config.sStartTh,
-        config.pPhaseTh, config.qPhaseTh, config.sPhaseTh, 0
+        logger.info("ATM90E36 %s: URMSA=0x%04X IRMSA=0x%04X FREQ=0x%04X SYS0=0x%04X SYS1=0x%04X CFG=0x%04X MEN=0x%04X",
+                    tag, rawU, rawI, rawF, sys0, sys1, cfg, men);
+        return rawU | rawI | rawF | sys0 | sys1;
     };
-    m_csZero = calculateChecksum(csCalc, 11);
-    writeRegister(REG_CS_ZERO, m_csZero);
-    // End config section (latch checksum)
-    writeRegister(REG_CONFIG_START, CONFIG_END_MAGIC);
-    delay(10);
-    
-    // *** PHASE 2: CALIBRATION REGISTERS (CalStart) ***
-    logger.debug("ATM90E36: Writing power calibration registers");
-    writeRegister(REG_CAL_START, CAL_CONFIG_START);  // 0x5678
-    writeRegister(REG_P_OFFSET_A, config.calRegs[0]);
-    writeRegister(REG_Q_OFFSET_A, config.calRegs[1]);
-    writeRegister(REG_GAIN_A, config.calRegs[2]);
-    writeRegister(REG_PHI_A, config.calRegs[3]);
-    writeRegister(REG_P_OFFSET_B, config.calRegs[4]);
-    writeRegister(REG_Q_OFFSET_B, config.calRegs[5]);
-    writeRegister(REG_GAIN_B, config.calRegs[6]);
-    writeRegister(REG_PHI_B, config.calRegs[7]);
-    writeRegister(REG_P_OFFSET_C, config.calRegs[8]);
-    writeRegister(REG_Q_OFFSET_C, config.calRegs[9]);
-    writeRegister(REG_GAIN_C, config.calRegs[10]);
-    writeRegister(REG_PHI_C, config.calRegs[11]);
-    
-    // Calculate CS1
-    m_csOne = calculateChecksum(config.calRegs, 12);
-    writeRegister(REG_CS_ONE, m_csOne);
-    // End power calibration section
-    writeRegister(REG_CAL_START, CONFIG_END_MAGIC);
-    delay(10);
-    
-    // *** PHASE 3: HARMONIC REGISTERS (HarmStart) ***
-    logger.debug("ATM90E36: Writing harmonic calibration registers");
-    writeRegister(REG_HARM_START, CAL_CONFIG_START);  // 0x5678
-    writeRegister(REG_P_OFFSET_AF, config.harCalRegs[0]);
-    writeRegister(REG_P_OFFSET_BF, config.harCalRegs[1]);
-    writeRegister(REG_P_OFFSET_CF, config.harCalRegs[2]);
-    writeRegister(REG_P_GAIN_AF, config.harCalRegs[3]);
-    writeRegister(REG_P_GAIN_BF, config.harCalRegs[4]);
-    writeRegister(REG_P_GAIN_CF, config.harCalRegs[5]);
-    
-    // Calculate CS2
-    m_csTwo = calculateChecksum(config.harCalRegs, 6);
-    writeRegister(REG_CS_TWO, m_csTwo);
-    // End harmonic calibration section
-    writeRegister(REG_HARM_START, CONFIG_END_MAGIC);
-    delay(10);
-    
-    // *** PHASE 4: MEASUREMENT CALIBRATION REGISTERS (AdjStart) ***
-    logger.debug("ATM90E36: Writing measurement calibration registers");
-    writeRegister(REG_ADJ_START, CAL_CONFIG_START);  // 0x5678
-    writeRegister(REG_U_GAIN_A, config.measCalRegs[0]);
-    writeRegister(REG_I_GAIN_A, config.measCalRegs[1]);
-    writeRegister(REG_U_OFFSET_A, config.measCalRegs[2]);
-    writeRegister(REG_I_OFFSET_A, config.measCalRegs[3]);
-    writeRegister(REG_U_GAIN_B, config.measCalRegs[4]);
-    writeRegister(REG_I_GAIN_B, config.measCalRegs[5]);
-    writeRegister(REG_U_OFFSET_B, config.measCalRegs[6]);
-    writeRegister(REG_I_OFFSET_B, config.measCalRegs[7]);
-    writeRegister(REG_U_GAIN_C, config.measCalRegs[8]);
-    writeRegister(REG_I_GAIN_C, config.measCalRegs[9]);
-    writeRegister(REG_U_OFFSET_C, config.measCalRegs[10]);
-    writeRegister(REG_I_OFFSET_C, config.measCalRegs[11]);
-    writeRegister(REG_I_GAIN_N, config.measCalRegs[12]);
-    writeRegister(REG_I_OFFSET_N, config.measCalRegs[13]);
-    
-    // Calculate CS3
-    m_csThree = calculateChecksum(config.measCalRegs, 14);
-    writeRegister(REG_CS_THREE, m_csThree);
-    // End measurement calibration section
-    writeRegister(REG_ADJ_START, CONFIG_END_MAGIC);
-    delay(10);
-    
-    logger.info("ATM90E36: Calibration complete");
-    return true;
-}
 
-uint16_t ATM90E36Driver::calculateChecksum(const uint16_t* registers, uint8_t count) {
-    uint32_t sum = 0;
-    for (uint8_t i = 0; i < count; i++) {
-        sum += registers[i];
-    }
-    sum += CAL_CONFIG_START;  // Add magic number
-    sum = ~sum;  // One's complement
-    return (uint16_t)(sum & 0xFFFF);
-}
+    auto looksLikeNoSPI = [&](uint16_t rawU, uint16_t rawI, uint16_t rawF, uint16_t sys0, uint16_t sys1) {
+        // Common failure patterns when CS/MISO are wrong or bus is conflicted:
+        // - all zeros
+        // - all 0xFFFF
+        // - repeating 0x55xx / 0xAAxx patterns (echo / floating bus)
+        const bool all0  = (rawU == 0 && rawI == 0 && rawF == 0 && sys0 == 0 && sys1 == 0);
+        const bool allFF = (rawU == 0xFFFF && rawI == 0xFFFF && rawF == 0xFFFF);
+        const bool pat55 = ((sys0 & 0xFF00) == 0x5500) || ((rawU & 0xFF00) == 0x5500) || ((rawI & 0xFF00) == 0x5500);
+        const bool patAA = ((sys0 & 0xFF00) == 0xAA00) || ((rawU & 0xFF00) == 0xAA00) || ((rawI & 0xFF00) == 0xAA00);
+        return all0 || allFF || pat55 || patAA;
+    };
 
-bool ATM90E36Driver::verifyChecksums() {
-    Logger& logger = Logger::getInstance();
-    
-    // Read system status to check for errors
-    uint16_t sysStatus0 = readRegister(REG_SYS_STATUS0);
-    
-    bool cs0Error = (sysStatus0 & 0x4000) != 0;
-    bool cs1Error = (sysStatus0 & 0x1000) != 0;
-    bool cs2Error = (sysStatus0 & 0x0400) != 0;
-    bool cs3Error = (sysStatus0 & 0x0100) != 0;
-    
-    logger.debug("ATM90E36: Checksum status - CS0:%d CS1:%d CS2:%d CS3:%d", 
-                 cs0Error, cs1Error, cs2Error, cs3Error);
-    
-    if (cs0Error || cs1Error || cs2Error || cs3Error) {
-        logger.error("ATM90E36: Checksum verification failed");
-        return false;
-    }
-    
-    return true;
-}
+    auto sanityRead = [&]() {
+        const uint16_t rawU = m_ic->CommEnergyIC(READ, UrmsA, 0x0000);
+        const uint16_t rawI = m_ic->CommEnergyIC(READ, IrmsA, 0x0000);
+        const uint16_t rawF = m_ic->CommEnergyIC(READ, Freq,  0x0000);
+        const uint16_t sys0 = m_ic->CommEnergyIC(READ, SysStatus0, 0x0000);
+        const uint16_t sys1 = m_ic->CommEnergyIC(READ, SysStatus1, 0x0000);
+        return looksLikeNoSPI(rawU, rawI, rawF, sys0, sys1);
+    };
 
-bool ATM90E36Driver::hasCalibrationError() {
-    uint16_t sysStatus0 = readRegister(REG_SYS_STATUS0);
-    return ((sysStatus0 & 0x4000) || (sysStatus0 & 0x1000) || 
-            (sysStatus0 & 0x0400) || (sysStatus0 & 0x0100));
-}
+    // Execute the exact V1 initialization/calibration/write-unlock sequence.
+    // This is the most important fix for the "0x5500 / all-zero RMS" SPI symptom.
+    m_ic->begin(config.lineFreq, config.pgaGain, ugain1, ugain2, ugain3, igainA, igainB, igainC, igainN);
+    m_ic->InitEnergy();
 
-// ============================================================================
-// LOW-LEVEL SPI COMMUNICATION
-// ============================================================================
+    // Proof-step 1: immediately after init
+    logRawProof("RAW0");
 
-uint16_t ATM90E36Driver::readRegister(uint16_t address) {
-    SPIBus& spi = SPIBus::getInstance();
-    if (!spi.isInitialized()) {
-        m_lastError = ErrorCode::SPI_INIT_FAILED;
-        return 0xFFFF;
-    }
-    
-    uint16_t val = spi.readRegister(PIN_SPI_CS_ATM90E36, address);
+    // Warm-up: RMS/frequency registers can be 0 for the first measurement window.
+    // Give the metering core time to accumulate at least one full cycle.
+    delay(1200);
+    logRawProof("RAW1");
 
-    // Guard against floating-bus reads (0xFFFF) which indicate CS/config/SPI issues.
-    if (val == 0xFFFF) {
-        m_lastError = ErrorCode::ATM_SPI_COMM_ERROR;
-        static uint32_t s_lastWarn = 0;
-        uint32_t now = millis();
-        if (now - s_lastWarn > 1000) {
-            Logger::getInstance().error("ATM90E36: SPI read returned 0xFFFF at reg 0x%04X", (unsigned)address);
-            s_lastWarn = now;
+    // If still looks like a bus issue, retry init once (common after brown-out or fast reboot).
+    if (sanityRead()) {
+        logger.warn("ATM90E36: Raw registers look invalid (possible SPI conflict). Retrying init...");
+        SPI.end();
+        delay(10);
+        SPI.begin(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, PIN_SPI_CS_ATM90E36);
+        delay(10);
+        m_ic->begin(config.lineFreq, config.pgaGain, ugain1, ugain2, ugain3, igainA, igainB, igainC, igainN);
+        m_ic->InitEnergy();
+        delay(1200);
+        logRawProof("RAW2");
+
+        if (sanityRead()) {
+            logger.error("ATM90E36: SPI sanity still failing after retry");
+            m_initialized = false;
+            m_lastError = ErrorCode::ATM_INIT_FAILED;
+            return false;
         }
     }
 
-    return val;
-}
-
-bool ATM90E36Driver::writeRegister(uint16_t address, uint16_t value) {
-    SPIBus& spi = SPIBus::getInstance();
-    if (!spi.isInitialized()) {
-        m_lastError = ErrorCode::SPI_INIT_FAILED;
-        return false;
-    }
-    
-    return spi.writeRegister(PIN_SPI_CS_ATM90E36, address, value);
-}
-
-uint32_t ATM90E36Driver::read32BitRegister(uint16_t highAddress, uint16_t lowAddress) {
-    // ATM90E36 requires reading high register twice for 32-bit values
-    uint16_t valH = readRegister(highAddress);
-    uint16_t valL = readRegister(lowAddress);
-    uint16_t valH2 = readRegister(highAddress);  // Read high again
-    
-    uint32_t val = ((uint32_t)valH2 << 16) | valL;
-    return val;
-}
-
-// ============================================================================
-// BULK READ (OPTIMIZED)
-// ============================================================================
-
-bool ATM90E36Driver::readAll(MeterData& data) {
-    if (!m_initialized) {
-        m_lastError = ErrorCode::ATM_INIT_FAILED;
-        return false;
-    }
-    
-    // Read all voltage/current/power registers
-    data.phaseA.voltageRMS = getVoltageA();
-    data.phaseB.voltageRMS = getVoltageB();
-    data.phaseC.voltageRMS = getVoltageC();
-    
-    data.phaseA.currentRMS = getCurrentA();
-    data.phaseB.currentRMS = getCurrentB();
-    data.phaseC.currentRMS = getCurrentC();
-    data.neutralCurrent = getCurrentN();
-    
-    data.phaseA.activePower = getActivePowerA();
-    data.phaseB.activePower = getActivePowerB();
-    data.phaseC.activePower = getActivePowerC();
-    data.totalActivePower = getActivePowerTotal();
-    
-    data.phaseA.reactivePower = getReactivePowerA();
-    data.phaseB.reactivePower = getReactivePowerB();
-    data.phaseC.reactivePower = getReactivePowerC();
-    data.totalReactivePower = getReactivePowerTotal();
-    
-    data.phaseA.apparentPower = getApparentPowerA();
-    data.phaseB.apparentPower = getApparentPowerB();
-    data.phaseC.apparentPower = getApparentPowerC();
-    data.totalApparentPower = getApparentPowerTotal();
-    
-    data.phaseA.powerFactor = getPowerFactorA();
-    data.phaseB.powerFactor = getPowerFactorB();
-    data.phaseC.powerFactor = getPowerFactorC();
-    data.totalPowerFactor = getPowerFactorTotal();
-    
-    data.phaseA.meanPhaseAngle = getPhaseAngleA();
-    data.phaseB.meanPhaseAngle = getPhaseAngleB();
-    data.phaseC.meanPhaseAngle = getPhaseAngleC();
-    
-    data.phaseA.voltageTHDN = getVoltageTHDA();
-    data.phaseB.voltageTHDN = getVoltageTHDB();
-    data.phaseC.voltageTHDN = getVoltageTHDC();
-    
-    data.phaseA.currentTHDN = getCurrentTHDA();
-    data.phaseB.currentTHDN = getCurrentTHDB();
-    data.phaseC.currentTHDN = getCurrentTHDC();
-    
-    data.frequency = getFrequency();
-    data.boardTemperature = getTemperature();
-    
-    // Energy counters (optional - clear on read)
-    // data.totalFwdActiveEnergy = getFwdActiveEnergyTotal();
-    // data.totalRevActiveEnergy = getRevActiveEnergyTotal();
-    
-    data.meteringStatus0 = readRegister(REG_EN_STATUS0);
-    data.meteringStatus1 = readRegister(REG_EN_STATUS1);
-    data.timestamp = millis() / 1000;
-    data.valid = true;
-    
-    m_lastReadTime = millis();
+    m_initialized = true;
+    m_lastError = ErrorCode::NONE;
     return true;
 }
 
-// ============================================================================
-// VOLTAGE READINGS
-// ============================================================================
+bool ATM90E36Driver::readAll(MeterData& data) {
+    if (!m_initialized || !m_ic) {
+        // V2 ErrorCode enum does not include a dedicated "not initialized" value.
+        // Reuse the closest existing error so callers can surface a meaningful fault.
+        m_lastError = ErrorCode::ATM_INIT_FAILED;
+        return false;
+    }
 
-float ATM90E36Driver::getVoltageA() {
-    uint16_t val = readRegister(REG_U_RMS_A);
-    return (float)val / VOLTAGE_SCALE;
+    // Phases (Voltage/Current)
+    data.phaseA.voltageRMS = (float)m_ic->GetLineVoltage1();
+    data.phaseB.voltageRMS = (float)m_ic->GetLineVoltage2();
+    data.phaseC.voltageRMS = (float)m_ic->GetLineVoltage3();
+
+    data.phaseA.currentRMS = (float)m_ic->GetLineCurrentCT1();
+    data.phaseB.currentRMS = (float)m_ic->GetLineCurrentCT2();
+    data.phaseC.currentRMS = (float)m_ic->GetLineCurrentCT3();
+
+    // Power (use mean power values for stability)
+    data.phaseA.activePower   = (float)m_ic->GetMeanActivePowerPhaA();
+    data.phaseB.activePower   = (float)m_ic->GetMeanActivePowerPhaB();
+    data.phaseC.activePower   = (float)m_ic->GetMeanActivePowerPhaC();
+    data.totalActivePower     = (float)m_ic->GetTotalActivePower();
+
+    data.phaseA.reactivePower = (float)m_ic->GetMeanReactivePowerPhaA();
+    data.phaseB.reactivePower = (float)m_ic->GetMeanReactivePowerPhaB();
+    data.phaseC.reactivePower = (float)m_ic->GetMeanReactivePowerPhaC();
+    data.totalReactivePower   = (float)m_ic->GetTotalReactivePower();
+
+    data.phaseA.apparentPower = (float)m_ic->GetMeanApparentPowerPhaA();
+    data.phaseB.apparentPower = (float)m_ic->GetMeanApparentPowerPhaB();
+    data.phaseC.apparentPower = (float)m_ic->GetMeanApparentPowerPhaC();
+    data.totalApparentPower   = (float)m_ic->GetTotalApparentPower();
+
+    // PF / angles
+    data.phaseA.powerFactor   = (float)m_ic->GetPowerFactorCT1();
+    data.phaseB.powerFactor   = (float)m_ic->GetPowerFactorCT2();
+    data.phaseC.powerFactor   = (float)m_ic->GetPowerFactorCT3();
+    data.totalPowerFactor     = (float)m_ic->GetTotalPowerFactor();
+
+    data.phaseA.meanPhaseAngle = (float)m_ic->GetPhaseCT1();
+    data.phaseB.meanPhaseAngle = (float)m_ic->GetPhaseCT2();
+    data.phaseC.meanPhaseAngle = (float)m_ic->GetPhaseCT3();
+
+    data.phaseA.voltagePhaseAngle = (float)m_ic->GetPhaseangV1();
+    data.phaseB.voltagePhaseAngle = (float)m_ic->GetPhaseangV2();
+    data.phaseC.voltagePhaseAngle = (float)m_ic->GetPhaseangV3();
+
+    // THD
+    data.phaseA.voltageTHDN = (float)m_ic->GetLineVoltage1THDN();
+    data.phaseB.voltageTHDN = (float)m_ic->GetLineVoltage2THDN();
+    data.phaseC.voltageTHDN = (float)m_ic->GetLineVoltage3THDN();
+
+    data.phaseA.currentTHDN = (float)m_ic->GetLineCurrentCT1THDN();
+    data.phaseB.currentTHDN = (float)m_ic->GetLineCurrentCT2THDN();
+    data.phaseC.currentTHDN = (float)m_ic->GetLineCurrentCT3THDN();
+
+    // Neutral & frequency/temperature
+    data.neutralCurrent = (float)m_ic->GetLineCurrentCTN();
+    data.frequency      = (float)m_ic->GetFrequency();
+    // V2 MeterData stores this as boardTemperature.
+    data.boardTemperature = (float)m_ic->GetTemperature();
+
+    // Energy (kWh / kVARh / kVAh)
+    data.totalFwdActiveEnergy     = (float)m_ic->GetImportEnergy();
+    data.totalRevActiveEnergy     = (float)m_ic->GetExportEnergy();
+    data.totalFwdReactiveEnergy   = (float)m_ic->GetImportReactiveEnergy();
+    data.totalRevReactiveEnergy   = (float)m_ic->GetExportReactiveEnergy();
+    data.totalApparentEnergy      = (float)m_ic->GetImportApparentEnergy();
+
+    m_lastError = ErrorCode::NONE;
+    return true;
 }
 
-float ATM90E36Driver::getVoltageB() {
-    uint16_t val = readRegister(REG_U_RMS_B);
-    return (float)val / VOLTAGE_SCALE;
+bool ATM90E36Driver::verifyChecksums() {
+    // The V1.0 driver does not expose explicit checksum verification for all sections on ATM90E36.
+    // We treat "no calibration error" + non-zero SYS status as a practical verification.
+    if (!m_initialized || !m_ic) return false;
+    return !hasCalibrationError();
 }
 
-float ATM90E36Driver::getVoltageC() {
-    uint16_t val = readRegister(REG_U_RMS_C);
-    return (float)val / VOLTAGE_SCALE;
+bool ATM90E36Driver::hasCalibrationError() {
+    if (!m_initialized || !m_ic) return true;
+    return m_ic->calibrationError();
 }
 
-// ============================================================================
-// CURRENT READINGS
-// ============================================================================
-
-float ATM90E36Driver::getCurrentA() {
-    uint16_t val = readRegister(REG_I_RMS_A);
-    return (float)val / CURRENT_SCALE;
+bool ATM90E36Driver::softReset() {
+    if (!m_initialized || !m_ic) return false;
+    // V1 sequence uses: SoftReset = 0x789A
+    m_ic->CommEnergyIC(WRITE, SoftReset, 0x789A);
+    delay(50);
+    return true;
 }
 
-float ATM90E36Driver::getCurrentB() {
-    uint16_t val = readRegister(REG_I_RMS_B);
-    return (float)val / CURRENT_SCALE;
-}
+// --- Individual getter wrappers ---
+float ATM90E36Driver::getVoltageA() { return m_initialized ? (float)m_ic->GetLineVoltage1() : 0.0f; }
+float ATM90E36Driver::getVoltageB() { return m_initialized ? (float)m_ic->GetLineVoltage2() : 0.0f; }
+float ATM90E36Driver::getVoltageC() { return m_initialized ? (float)m_ic->GetLineVoltage3() : 0.0f; }
 
-float ATM90E36Driver::getCurrentC() {
-    uint16_t val = readRegister(REG_I_RMS_C);
-    return (float)val / CURRENT_SCALE;
-}
+float ATM90E36Driver::getCurrentA() { return m_initialized ? (float)m_ic->GetLineCurrentCT1() : 0.0f; }
+float ATM90E36Driver::getCurrentB() { return m_initialized ? (float)m_ic->GetLineCurrentCT2() : 0.0f; }
+float ATM90E36Driver::getCurrentC() { return m_initialized ? (float)m_ic->GetLineCurrentCT3() : 0.0f; }
+float ATM90E36Driver::getCurrentN() { return m_initialized ? (float)m_ic->GetLineCurrentCTN() : 0.0f; }
 
-float ATM90E36Driver::getCurrentN() {
-    uint16_t val = readRegister(REG_I_RMS_N);
-    return (float)val / CURRENT_SCALE;
-}
+float ATM90E36Driver::getActivePowerA() { return m_initialized ? (float)m_ic->GetMeanActivePowerPhaA() : 0.0f; }
+float ATM90E36Driver::getActivePowerB() { return m_initialized ? (float)m_ic->GetMeanActivePowerPhaB() : 0.0f; }
+float ATM90E36Driver::getActivePowerC() { return m_initialized ? (float)m_ic->GetMeanActivePowerPhaC() : 0.0f; }
+float ATM90E36Driver::getActivePowerTotal() { return m_initialized ? (float)m_ic->GetTotalActivePower() : 0.0f; }
 
-// ============================================================================
-// ACTIVE POWER READINGS (32-bit)
-// ============================================================================
+float ATM90E36Driver::getReactivePowerA() { return m_initialized ? (float)m_ic->GetMeanReactivePowerPhaA() : 0.0f; }
+float ATM90E36Driver::getReactivePowerB() { return m_initialized ? (float)m_ic->GetMeanReactivePowerPhaB() : 0.0f; }
+float ATM90E36Driver::getReactivePowerC() { return m_initialized ? (float)m_ic->GetMeanReactivePowerPhaC() : 0.0f; }
+float ATM90E36Driver::getReactivePowerTotal() { return m_initialized ? (float)m_ic->GetTotalReactivePower() : 0.0f; }
 
-float ATM90E36Driver::getActivePowerA() {
-    int32_t val = (int32_t)read32BitRegister(REG_P_MEAN_A, REG_P_MEAN_A_LSB);
-    return (float)val * 0.00032;  // Power scaling from V1.0
-}
+float ATM90E36Driver::getApparentPowerA() { return m_initialized ? (float)m_ic->GetMeanApparentPowerPhaA() : 0.0f; }
+float ATM90E36Driver::getApparentPowerB() { return m_initialized ? (float)m_ic->GetMeanApparentPowerPhaB() : 0.0f; }
+float ATM90E36Driver::getApparentPowerC() { return m_initialized ? (float)m_ic->GetMeanApparentPowerPhaC() : 0.0f; }
+float ATM90E36Driver::getApparentPowerTotal() { return m_initialized ? (float)m_ic->GetTotalApparentPower() : 0.0f; }
 
-float ATM90E36Driver::getActivePowerB() {
-    int32_t val = (int32_t)read32BitRegister(REG_P_MEAN_B, REG_P_MEAN_B_LSB);
-    return (float)val * 0.00032;
-}
+float ATM90E36Driver::getPowerFactorA() { return m_initialized ? (float)m_ic->GetPowerFactorCT1() : 0.0f; }
+float ATM90E36Driver::getPowerFactorB() { return m_initialized ? (float)m_ic->GetPowerFactorCT2() : 0.0f; }
+float ATM90E36Driver::getPowerFactorC() { return m_initialized ? (float)m_ic->GetPowerFactorCT3() : 0.0f; }
+float ATM90E36Driver::getPowerFactorTotal() { return m_initialized ? (float)m_ic->GetTotalPowerFactor() : 0.0f; }
 
-float ATM90E36Driver::getActivePowerC() {
-    int32_t val = (int32_t)read32BitRegister(REG_P_MEAN_C, REG_P_MEAN_C_LSB);
-    return (float)val * 0.00032;
-}
+float ATM90E36Driver::getPhaseAngleA() { return m_initialized ? (float)m_ic->GetPhaseCT1() : 0.0f; }
+float ATM90E36Driver::getPhaseAngleB() { return m_initialized ? (float)m_ic->GetPhaseCT2() : 0.0f; }
+float ATM90E36Driver::getPhaseAngleC() { return m_initialized ? (float)m_ic->GetPhaseCT3() : 0.0f; }
 
-float ATM90E36Driver::getActivePowerTotal() {
-    int32_t val = (int32_t)read32BitRegister(REG_P_MEAN_T, REG_P_MEAN_T_LSB);
-    return (float)val * 0.00032;
-}
+float ATM90E36Driver::getVoltageTHDA() { return m_initialized ? (float)m_ic->GetLineVoltage1THDN() : 0.0f; }
+float ATM90E36Driver::getVoltageTHDB() { return m_initialized ? (float)m_ic->GetLineVoltage2THDN() : 0.0f; }
+float ATM90E36Driver::getVoltageTHDC() { return m_initialized ? (float)m_ic->GetLineVoltage3THDN() : 0.0f; }
+float ATM90E36Driver::getCurrentTHDA() { return m_initialized ? (float)m_ic->GetLineCurrentCT1THDN() : 0.0f; }
+float ATM90E36Driver::getCurrentTHDB() { return m_initialized ? (float)m_ic->GetLineCurrentCT2THDN() : 0.0f; }
+float ATM90E36Driver::getCurrentTHDC() { return m_initialized ? (float)m_ic->GetLineCurrentCT3THDN() : 0.0f; }
 
-// ============================================================================
-// REACTIVE POWER READINGS (32-bit)
-// ============================================================================
+float ATM90E36Driver::getFrequency() { return m_initialized ? (float)m_ic->GetFrequency() : 0.0f; }
+float ATM90E36Driver::getTemperature() { return m_initialized ? (float)m_ic->GetTemperature() : 0.0f; }
 
-float ATM90E36Driver::getReactivePowerA() {
-    int32_t val = (int32_t)read32BitRegister(REG_Q_MEAN_A, REG_Q_MEAN_A_LSB);
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getReactivePowerB() {
-    int32_t val = (int32_t)read32BitRegister(REG_Q_MEAN_B, REG_Q_MEAN_B_LSB);
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getReactivePowerC() {
-    int32_t val = (int32_t)read32BitRegister(REG_Q_MEAN_C, REG_Q_MEAN_C_LSB);
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getReactivePowerTotal() {
-    int32_t val = (int32_t)read32BitRegister(REG_Q_MEAN_T, REG_Q_MEAN_T_LSB);
-    return (float)val * 0.00032;
-}
-
-// ============================================================================
-// APPARENT POWER READINGS (32-bit)
-// ============================================================================
-
-float ATM90E36Driver::getApparentPowerA() {
-    int32_t val = (int32_t)read32BitRegister(REG_S_MEAN_A, 0xBA);  // SmeanALSB not in map
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getApparentPowerB() {
-    int32_t val = (int32_t)read32BitRegister(REG_S_MEAN_B, 0xBA);  // SmeanBLSB not in map
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getApparentPowerC() {
-    int32_t val = (int32_t)read32BitRegister(REG_S_MEAN_C, 0xBB);  // SmeanCLSB not in map
-    return (float)val * 0.00032;
-}
-
-float ATM90E36Driver::getApparentPowerTotal() {
-    int32_t val = (int32_t)read32BitRegister(REG_S_MEAN_T, 0xB8);  // SAmeanTLSB not in map
-    return (float)val * 0.00032;
-}
-
-// ============================================================================
-// POWER FACTOR READINGS (16-bit signed)
-// ============================================================================
-
-float ATM90E36Driver::getPowerFactorA() {
-    int16_t val = (int16_t)readRegister(REG_PF_MEAN_A);
-    return (float)val / PF_SCALE;
-}
-
-float ATM90E36Driver::getPowerFactorB() {
-    int16_t val = (int16_t)readRegister(REG_PF_MEAN_B);
-    return (float)val / PF_SCALE;
-}
-
-float ATM90E36Driver::getPowerFactorC() {
-    int16_t val = (int16_t)readRegister(REG_PF_MEAN_C);
-    return (float)val / PF_SCALE;
-}
-
-float ATM90E36Driver::getPowerFactorTotal() {
-    int16_t val = (int16_t)readRegister(REG_PF_MEAN_T);
-    return (float)val / PF_SCALE;
-}
-
-// ============================================================================
-// PHASE ANGLE READINGS
-// ============================================================================
-
-float ATM90E36Driver::getPhaseAngleA() {
-    int16_t val = (int16_t)readRegister(REG_P_ANGLE_A);
-    return (float)val / ANGLE_SCALE;
-}
-
-float ATM90E36Driver::getPhaseAngleB() {
-    int16_t val = (int16_t)readRegister(REG_P_ANGLE_B);
-    return (float)val / ANGLE_SCALE;
-}
-
-float ATM90E36Driver::getPhaseAngleC() {
-    int16_t val = (int16_t)readRegister(REG_P_ANGLE_C);
-    return (float)val / ANGLE_SCALE;
-}
-
-// ============================================================================
-// THD READINGS
-// ============================================================================
-
-float ATM90E36Driver::getVoltageTHDA() {
-    uint16_t val = readRegister(REG_THD_NU_A);
-    return (float)val / THD_SCALE;
-}
-
-float ATM90E36Driver::getVoltageTHDB() {
-    uint16_t val = readRegister(REG_THD_NU_B);
-    return (float)val / THD_SCALE;
-}
-
-float ATM90E36Driver::getVoltageTHDC() {
-    uint16_t val = readRegister(REG_THD_NU_C);
-    return (float)val / THD_SCALE;
-}
-
-float ATM90E36Driver::getCurrentTHDA() {
-    uint16_t val = readRegister(REG_THD_NI_A);
-    return (float)val / THD_SCALE;
-}
-
-float ATM90E36Driver::getCurrentTHDB() {
-    uint16_t val = readRegister(REG_THD_NI_B);
-    return (float)val / THD_SCALE;
-}
-
-float ATM90E36Driver::getCurrentTHDC() {
-    uint16_t val = readRegister(REG_THD_NI_C);
-    return (float)val / THD_SCALE;
-}
-
-// ============================================================================
-// FREQUENCY & TEMPERATURE
-// ============================================================================
-
-float ATM90E36Driver::getFrequency() {
-    uint16_t val = readRegister(REG_FREQUENCY);
-    return (float)val / FREQUENCY_SCALE;
-}
-
-float ATM90E36Driver::getTemperature() {
-    int16_t val = (int16_t)readRegister(REG_TEMPERATURE);
-    return (float)val;  // Temperature in °C (direct reading)
-}
-
-// ============================================================================
-// ENERGY COUNTERS (32-bit, clear-on-read)
-// ============================================================================
-
-uint32_t ATM90E36Driver::getFwdActiveEnergyA() {
-    uint16_t val = readRegister(REG_AP_ENERGY_A);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getFwdActiveEnergyB() {
-    uint16_t val = readRegister(REG_AP_ENERGY_B);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getFwdActiveEnergyC() {
-    uint16_t val = readRegister(REG_AP_ENERGY_C);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getFwdActiveEnergyTotal() {
-    uint16_t val = readRegister(REG_AP_ENERGY_T);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getRevActiveEnergyA() {
-    uint16_t val = readRegister(REG_AN_ENERGY_A);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getRevActiveEnergyB() {
-    uint16_t val = readRegister(REG_AN_ENERGY_B);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getRevActiveEnergyC() {
-    uint16_t val = readRegister(REG_AN_ENERGY_C);
-    return (uint32_t)val;
-}
-
-uint32_t ATM90E36Driver::getRevActiveEnergyTotal() {
-    uint16_t val = readRegister(REG_AN_ENERGY_T);
-    return (uint32_t)val;
-}
+// Energy raw getters not used (V2 uses float kWh fields in MeterData)
+uint32_t ATM90E36Driver::getFwdActiveEnergyA() { return 0; }
+uint32_t ATM90E36Driver::getFwdActiveEnergyB() { return 0; }
+uint32_t ATM90E36Driver::getFwdActiveEnergyC() { return 0; }
+uint32_t ATM90E36Driver::getFwdActiveEnergyTotal() { return 0; }
+uint32_t ATM90E36Driver::getRevActiveEnergyA() { return 0; }
+uint32_t ATM90E36Driver::getRevActiveEnergyB() { return 0; }
+uint32_t ATM90E36Driver::getRevActiveEnergyC() { return 0; }
+uint32_t ATM90E36Driver::getRevActiveEnergyTotal() { return 0; }
