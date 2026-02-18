@@ -1,8 +1,22 @@
-/**
+﻿/**
  * @file NetworkManager.cpp
  * @brief WiFi Network Manager implementation
- * @note  WiFi AP connection fix: proper initialization order, explicit softAP
- *        configuration with channel/auth mode, and deferred custom MAC setting.
+ * @note  WiFi AP connection fix v2: eliminated post-softAP MAC change that caused
+ *        AP restart cycle ("AP started → AP stopped → AP started") leading to
+ *        "Can't connect to this network" on Windows clients.
+ *
+ * ROOT CAUSE (from Log.txt analysis):
+ *   Calling esp_wifi_set_mac(WIFI_IF_AP, ...) AFTER WiFi.softAP() forces the
+ *   ESP-IDF driver to internally restart the AP interface. This produces the
+ *   sequence: AP_START → AP_STOP → AP_START visible in the log. Windows (and
+ *   some Android) WiFi drivers cache the first beacon/probe-response and then
+ *   fail the WPA2 4-way handshake because the AP recycled mid-association.
+ *
+ * FIX:
+ *   1. Set custom MAC ONLY via esp_iface_mac_addr_set() BEFORE WiFi.mode(WIFI_AP)
+ *   2. Do NOT call esp_wifi_set_mac() after softAP() — this avoids the restart
+ *   3. Explicit softAPConfig() + 5-parameter softAP() for stable DHCP/auth
+ *   4. Fallback: if AP fails with custom MAC, retry without it
  */
 
 #include "NetworkManager.h"
@@ -11,49 +25,29 @@
 #include <algorithm>
 #include "esp_mac.h"
 
- // Fixed SoftAP settings (no configurable AP params in WiFiConfig)
+ // ============================================================================
+ // DEFAULTS
+ // ============================================================================
 static constexpr const char* kSoftApSsid = "SM_GE3222M_Setup";
 static constexpr const char* kSoftApPass = "12345678";
 static constexpr const char* kSoftApMac = "C8:2E:A3:F5:7D:DC";
 
+// ============================================================================
+// HELPERS
+// ============================================================================
 static bool parseMac(const char* str, uint8_t out[6]) {
     if (!str || !out) return false;
     int v[6];
-    if (sscanf(str, "%x:%x:%x:%x:%x:%x", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) != 6) return false;
+    if (sscanf(str, "%x:%x:%x:%x:%x:%x",
+        &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) != 6)
+        return false;
     for (int i = 0; i < 6; ++i) out[i] = (uint8_t)(v[i] & 0xFF);
     return true;
 }
 
-/**
- * Set custom MAC address for SoftAP interface.
- * IMPORTANT: Must be called BEFORE WiFi.mode() or AFTER WiFi.softAP() completes,
- * NOT between WiFi.mode(WIFI_AP) and WiFi.softAP().
- */
-static bool setCustomWiFiApMac(const char* macStr) {
-    uint8_t macBytes[6];
-    if (!parseMac(macStr ? macStr : kSoftApMac, macBytes)) {
-        Serial.println("[MAC] Invalid WIFI_AP_MAC format!");
-        return false;
-    }
-
-    // Set at netif layer (this is safe to call early)
-    esp_err_t err1 = esp_iface_mac_addr_set(macBytes, ESP_MAC_WIFI_SOFTAP);
-
-    // Also set at WiFi driver layer
-    esp_err_t err2 = esp_wifi_set_mac(WIFI_IF_AP, macBytes);
-
-    if (err1 == ESP_OK && err2 == ESP_OK) {
-        Serial.printf("[MAC] WiFi AP MAC set to: %02X:%02X:%02X:%02X:%02X:%02X\n",
-            macBytes[0], macBytes[1], macBytes[2], macBytes[3], macBytes[4], macBytes[5]);
-        return true;
-    }
-    else {
-        Serial.printf("[MAC] Failed to set WiFi AP MAC (netif=%d, wifi=%d)\n", (int)err1, (int)err2);
-        return false;
-    }
-}
-
-
+// ============================================================================
+// SINGLETON
+// ============================================================================
 SMNetworkManager& SMNetworkManager::getInstance() {
     static SMNetworkManager instance;
     return instance;
@@ -76,6 +70,9 @@ SMNetworkManager::~SMNetworkManager() {
     stop();
 }
 
+// ============================================================================
+// INIT
+// ============================================================================
 bool SMNetworkManager::init(const WiFiConfig& config) {
     Logger& logger = Logger::getInstance();
 
@@ -109,6 +106,9 @@ bool SMNetworkManager::init(const WiFiConfig& config) {
     return true;
 }
 
+// ============================================================================
+// START STA
+// ============================================================================
 bool SMNetworkManager::startSTA() {
     Logger& logger = Logger::getInstance();
 
@@ -125,10 +125,6 @@ bool SMNetworkManager::startSTA() {
     // Stop any previous WiFi state first
     stop();
 
-    // STA-only mode (per Phase 4 plan):
-    //  - startSTA() is STA-only (no management AP)
-    //  - no WiFi.mode switching after start
-    // Avoid aggressive power-save that can cause reconnect loops on some routers.
     WiFi.persistent(false);
     delay(20);
 
@@ -136,7 +132,6 @@ bool SMNetworkManager::startSTA() {
     WiFi.mode(WIFI_STA);
     WiFi.setSleep(false);
     esp_wifi_set_ps(WIFI_PS_NONE);
-    // Max TX power helps stability on weak links.
     WiFi.setTxPower(WIFI_POWER_19_5dBm);
 
     // Ensure AP/DNS are fully stopped in STA-only operation
@@ -167,44 +162,25 @@ bool SMNetworkManager::startSTA() {
     return true;
 }
 
-bool SMNetworkManager::startAP(const char* ssid, const char* password) {
+// ============================================================================
+// INTERNAL AP START (the core fix lives here)
+// ============================================================================
+bool SMNetworkManager::startAPInternal(const char* apSSID, const char* apPass,
+    const char* apMAC, bool useCustomMac) {
     Logger& logger = Logger::getInstance();
 
-    if (!_initialized) {
-        logger.error("NetworkManager: Not initialized");
-        return false;
-    }
-
-    // Stop any active interface before starting AP-only.
-    stop();
-
-    // ===== SoftAP start logic (FIXED) =====
-    // Key fixes for "can't connect to this network":
-    //  1. Set custom MAC BEFORE WiFi.mode(WIFI_AP) via netif layer only
-    //  2. Explicitly configure softAP IP/gateway/subnet before softAP()
-    //  3. Call WiFi.softAP() with explicit channel (1) and auth mode (WPA2_PSK)
-    //  4. Set WiFi driver MAC AFTER softAP is fully started
     WiFi.persistent(false);
 
-    // Ensure we are not connected as STA
+    // Fully reset WiFi state
     WiFi.disconnect(true);
-    delay(100);
+    WiFi.mode(WIFI_OFF);
+    delay(200);
 
-    // Determine AP settings (prefer config, then params, then defaults)
-    const char* apSSID = (ssid && ssid[0]) ? ssid : (_config.apSsid[0] ? _config.apSsid : kSoftApSsid);
-    const char* apPASS = (password && password[0]) ? password : (_config.apPassword[0] ? _config.apPassword : kSoftApPass);
-    const char* apMAC = (_config.apMac[0] ? _config.apMac : kSoftApMac);
-
-    // Enforce WPA2 minimum length if password is provided
-    String apPassStr = String(apPASS ? apPASS : "");
-    if (!apPassStr.isEmpty() && apPassStr.length() < 8) {
-        logger.warn("NetworkManager: AP password too short, using default");
-        apPassStr = kSoftApPass;
-    }
-
-    // Step 1: Set custom MAC at netif layer BEFORE entering AP mode
-    // This ensures the MAC is applied when the AP interface initializes
-    {
+    // ─── Step 1: Set custom MAC at netif layer BEFORE entering AP mode ───
+    // esp_iface_mac_addr_set() writes to the netif MAC table. When the AP
+    // interface is subsequently created by WiFi.mode(WIFI_AP), it picks up
+    // this MAC automatically — no post-start restart needed.
+    if (useCustomMac && apMAC && apMAC[0]) {
         uint8_t macBytes[6];
         if (parseMac(apMAC, macBytes)) {
             esp_err_t err = esp_iface_mac_addr_set(macBytes, ESP_MAC_WIFI_SOFTAP);
@@ -212,60 +188,48 @@ bool SMNetworkManager::startAP(const char* ssid, const char* password) {
                 logger.info("NetworkManager: Pre-set AP MAC via netif: %s", apMAC);
             }
             else {
-                logger.warn("NetworkManager: Pre-set AP MAC failed (err=%d), will use default", (int)err);
+                logger.warn("NetworkManager: Pre-set AP MAC failed (err=%d)", (int)err);
             }
         }
     }
 
-    // Step 2: Enter AP mode
+    // ─── Step 2: Enter AP mode ─────────────────���────────────────────────
     WiFi.mode(WIFI_AP);
-    delay(100);  // Allow mode switch to stabilize
+    delay(150);  // Allow mode switch to fully stabilize
 
-    // Disable WiFi power-save for AP stability
+    // Disable power-save for AP stability
     WiFi.setSleep(false);
     esp_wifi_set_ps(WIFI_PS_NONE);
 
-    // Step 3: Explicitly configure AP IP addressing BEFORE softAP()
-    // This ensures the DHCP server is properly initialized
+    // ─── Step 3: Configure AP IP/subnet/DHCP BEFORE softAP() ───────────
     IPAddress apIP(192, 168, 4, 1);
     IPAddress apGateway(192, 168, 4, 1);
     IPAddress apSubnet(255, 255, 255, 0);
     if (!WiFi.softAPConfig(apIP, apGateway, apSubnet)) {
         logger.error("NetworkManager: Failed to configure AP IP/subnet");
-        // Continue anyway - softAP may still work with defaults
     }
-    delay(50);
+    delay(100);
 
-    // Step 4: Start SoftAP with EXPLICIT channel and auth mode parameters
-    // Using channel 1 (widely compatible) and explicit max_connection
-    // The 2-parameter form can cause auth mode issues on ESP32 Arduino 3.x
+    // ─── Step 4: Start SoftAP with all 5 parameters ────────────────────
+    // Explicit channel + hidden + max_connection avoids Arduino core
+    // defaulting to wrong auth mode on some ESP32 Arduino 3.x builds.
     bool result;
-    if (apPassStr.isEmpty()) {
-        // Open network: channel 1, max 4 connections, not hidden
-        result = WiFi.softAP(apSSID, NULL, 1, 0, 4);
+    if (apPass && strlen(apPass) >= 8) {
+        result = WiFi.softAP(apSSID, apPass, 1, 0, 4);
     }
     else {
-        // WPA2 protected: channel 1, not hidden, max 4 connections
-        result = WiFi.softAP(apSSID, apPassStr.c_str(), 1, 0, 4);
+        // Open network (or password too short for WPA2)
+        result = WiFi.softAP(apSSID, NULL, 1, 0, 4);
     }
 
-    if (result) {
-        // Step 5: After softAP is running, set MAC at driver level too
-        delay(100);  // Let AP fully start
-        {
-            uint8_t macBytes[6];
-            if (parseMac(apMAC, macBytes)) {
-                esp_err_t err = esp_wifi_set_mac(WIFI_IF_AP, macBytes);
-                if (err == ESP_OK) {
-                    logger.info("NetworkManager: AP driver MAC set: %s", apMAC);
-                }
-                else {
-                    logger.warn("NetworkManager: AP driver MAC set failed (err=%d), using auto MAC", (int)err);
-                }
-            }
-        }
+    // ─── Step 5: DO NOT call esp_wifi_set_mac() here! ───────────────────
+    // This was the root cause of the AP restart cycle.
+    // The MAC was already set at the netif layer in Step 1.
 
-        // Step 6: Start DNS server for captive portal
+    if (result) {
+        delay(100);  // Let AP fully stabilize before starting DNS
+
+        // Start DNS server for captive portal
         _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
         _dnsServer.start(53, "*", WiFi.softAPIP());
         _dnsServerRunning = true;
@@ -287,46 +251,55 @@ bool SMNetworkManager::startAP(const char* ssid, const char* password) {
             apSSID, WiFi.softAPIP().toString().c_str());
         logger.info("NetworkManager: AP MAC: %s", WiFi.softAPmacAddress().c_str());
     }
-    else {
-        logger.error("NetworkManager: Failed to start AP (SSID=%s)", apSSID);
 
-        // Retry once without custom MAC (fallback)
-        logger.warn("NetworkManager: Retrying AP start without custom MAC...");
-        WiFi.mode(WIFI_OFF);
-        delay(200);
-        WiFi.mode(WIFI_AP);
-        delay(100);
-        WiFi.softAPConfig(apIP, apGateway, apSubnet);
-        delay(50);
+    return result;
+}
 
-        if (apPassStr.isEmpty()) {
-            result = WiFi.softAP(apSSID, NULL, 1, 0, 4);
-        }
-        else {
-            result = WiFi.softAP(apSSID, apPassStr.c_str(), 1, 0, 4);
-        }
+// ============================================================================
+// START AP (public interface)
+// ============================================================================
+bool SMNetworkManager::startAP(const char* ssid, const char* password) {
+    Logger& logger = Logger::getInstance();
 
-        if (result) {
-            _dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-            _dnsServer.start(53, "*", WiFi.softAPIP());
-            _dnsServerRunning = true;
-            _isAPMode = true;
-            _isSTAMode = false;
-            _connectInProgress = false;
-            _connectStartMs = 0;
+    if (!_initialized) {
+        logger.error("NetworkManager: Not initialized");
+        return false;
+    }
 
-            logger.info("NetworkManager: AP started (fallback, no custom MAC) - SSID: %s, IP: %s",
-                apSSID, WiFi.softAPIP().toString().c_str());
-        }
-        else {
-            logger.error("NetworkManager: AP start failed even on retry");
-        }
+    // Stop any active interface before starting AP-only.
+    stop();
+
+    // Resolve AP credentials: caller args → config → compile-time defaults
+    const char* apSSID = (ssid && ssid[0]) ? ssid : (_config.apSsid[0] ? _config.apSsid : kSoftApSsid);
+    const char* apPASS = (password && password[0]) ? password : (_config.apPassword[0] ? _config.apPassword : kSoftApPass);
+    const char* apMAC = (_config.apMac[0] ? _config.apMac : kSoftApMac);
+
+    // Enforce WPA2 minimum password length
+    String apPassStr(apPASS ? apPASS : "");
+    if (!apPassStr.isEmpty() && apPassStr.length() < 8) {
+        logger.warn("NetworkManager: AP password '%s' too short (<8), using default", apPassStr.c_str());
+        apPassStr = kSoftApPass;
+    }
+
+    // ── Attempt 1: with custom MAC ──────────────────────────────────────
+    bool result = startAPInternal(apSSID, apPassStr.c_str(), apMAC, true);
+
+    // ── Attempt 2: without custom MAC (fallback) ────────────────────────
+    if (!result) {
+        logger.warn("NetworkManager: AP start failed with custom MAC, retrying without...");
+        result = startAPInternal(apSSID, apPassStr.c_str(), nullptr, false);
+    }
+
+    if (!result) {
+        logger.error("NetworkManager: AP start failed on all attempts");
     }
 
     return result;
 }
 
-
+// ============================================================================
+// STOP
+// ============================================================================
 void SMNetworkManager::stop() {
     Logger& logger = Logger::getInstance();
 
@@ -346,7 +319,7 @@ void SMNetworkManager::stop() {
     }
 
     WiFi.mode(WIFI_OFF);
-    delay(100);  // Allow WiFi stack to fully shut down
+    delay(150);  // Allow WiFi stack to fully shut down
 
     _isSTAMode = false;
     _isAPMode = false;
@@ -354,36 +327,30 @@ void SMNetworkManager::stop() {
     _connectStartMs = 0;
 }
 
+// ============================================================================
+// STATUS QUERIES
+// ============================================================================
 bool SMNetworkManager::isConnected() const {
     if (_isSTAMode) return WiFi.isConnected();
-    if (_isAPMode) return true; // AP is active
+    if (_isAPMode) return true;
     return false;
 }
 bool SMNetworkManager::isSTAMode() const { return _isSTAMode; }
 bool SMNetworkManager::isAPMode() const { return _isAPMode; }
 
-
 String SMNetworkManager::getLocalIP() const {
-    if (_isSTAMode) {
-        return WiFi.localIP().toString();
-    }
-    else if (_isAPMode) {
-        return WiFi.softAPIP().toString();
-    }
+    if (_isSTAMode) return WiFi.localIP().toString();
+    if (_isAPMode)  return WiFi.softAPIP().toString();
     return "0.0.0.0";
 }
 
 String SMNetworkManager::getAPIP() const {
-    if (_isAPMode) {
-        return WiFi.softAPIP().toString();
-    }
+    if (_isAPMode) return WiFi.softAPIP().toString();
     return "0.0.0.0";
 }
 
 int SMNetworkManager::getRSSI() const {
-    if (isConnected()) {
-        return WiFi.RSSI();
-    }
+    if (isConnected()) return WiFi.RSSI();
     return -100;
 }
 
@@ -397,15 +364,14 @@ String SMNetworkManager::getMACAddress() const {
 }
 
 String SMNetworkManager::getSSID() const {
-    if (_isSTAMode) {
-        return WiFi.SSID();
-    }
-    else if (_isAPMode) {
-        return WiFi.softAPSSID();
-    }
+    if (_isSTAMode) return WiFi.SSID();
+    if (_isAPMode)  return WiFi.softAPSSID();
     return "";
 }
 
+// ============================================================================
+// HANDLE (called from loop())
+// ============================================================================
 void SMNetworkManager::handle() {
     if (_dnsServerRunning) {
         _dnsServer.processNextRequest();
@@ -423,6 +389,9 @@ void SMNetworkManager::setAutoReconnect(bool enable) {
     }
 }
 
+// ============================================================================
+// STATIC IP
+// ============================================================================
 bool SMNetworkManager::applyStaticConfig() {
     IPAddress ip(_config.staticIP[0], _config.staticIP[1],
         _config.staticIP[2], _config.staticIP[3]);
@@ -435,35 +404,25 @@ bool SMNetworkManager::applyStaticConfig() {
     IPAddress dns2(_config.dns2[0], _config.dns2[1],
         _config.dns2[2], _config.dns2[3]);
 
-    if (dns1 == IPAddress(0, 0, 0, 0)) {
-        dns1 = gateway;
-    }
-
-    if (dns2 == IPAddress(0, 0, 0, 0)) {
-        dns2 = IPAddress(8, 8, 4, 4);
-    }
+    if (dns1 == IPAddress(0, 0, 0, 0)) dns1 = gateway;
+    if (dns2 == IPAddress(0, 0, 0, 0)) dns2 = IPAddress(8, 8, 4, 4);
 
     return WiFi.config(ip, gateway, subnet, dns1, dns2);
 }
 
+// ============================================================================
+// RECONNECT (STA only)
+// ============================================================================
 void SMNetworkManager::attemptReconnect() {
     unsigned long now = millis();
 
-    // If a connection attempt is already in progress, do not call WiFi.reconnect()/begin()
-    // again (ESP-IDF will log: "sta is connecting, return error").
     if (_connectInProgress) {
-        // Give the STA state machine time to finish association/DHCP.
-        if (now - _connectStartMs < 15000) {
-            return;
-        }
-        // Timed out -> allow a fresh attempt.
+        if (now - _connectStartMs < 15000) return;
         _connectInProgress = false;
         _connectStartMs = 0;
     }
 
-    if (now - _lastReconnectAttempt < _reconnectDelay) {
-        return;
-    }
+    if (now - _lastReconnectAttempt < _reconnectDelay) return;
 
     _lastReconnectAttempt = now;
     _reconnectAttempts++;
@@ -481,13 +440,8 @@ void SMNetworkManager::attemptReconnect() {
         _reconnectAttempts, _reconnectDelay);
 
     wl_status_t st = WiFi.status();
-    if (st == WL_CONNECTED) {
-        return;
-    }
+    if (st == WL_CONNECTED) return;
 
-    // Prefer reconnect() first. Some routers/firmware combos will emit
-    // "wifi: sta is connecting, return error" if we call WiFi.begin() too aggressively.
-    // We only force a full begin() occasionally as a fallback.
     if ((_reconnectAttempts % 3) == 0) {
         WiFi.disconnect(true);
         delay(100);
@@ -500,6 +454,9 @@ void SMNetworkManager::attemptReconnect() {
     _connectStartMs = now;
 }
 
+// ============================================================================
+// RSSI QUALITY
+// ============================================================================
 String SMNetworkManager::getRSSIQuality(int rssi) const {
     if (rssi >= -30) return "Excellent";
     if (rssi >= -50) return "Very Good";
@@ -509,6 +466,9 @@ String SMNetworkManager::getRSSIQuality(int rssi) const {
     return "Very Weak";
 }
 
+// ============================================================================
+// WIFI EVENT HANDLER
+// ============================================================================
 void SMNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     Logger& logger = Logger::getInstance();
     SMNetworkManager& nm = SMNetworkManager::getInstance();
@@ -530,25 +490,15 @@ void SMNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 
     case ARDUINO_EVENT_WIFI_STA_CONNECTED:
         logger.info("NetworkManager: Connected to SSID: %s", WiFi.SSID().c_str());
-
-        // We are associated, but DHCP may still be running.
-        // Hold off any "reconnect attempt" spam until we either get an IP or timeout.
         nm._connectInProgress = true;
         nm._connectStartMs = millis();
-
         nm._reconnectAttempts = 0;
         nm._reconnectDelay = MIN_RECONNECT_DELAY;
         break;
 
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-        // NOTE: Reason codes are ESP-IDF specific.
-        logger.warn("NetworkManager: Disconnected from WiFi (reason=%d)", (int)info.wifi_sta_disconnected.reason);
-
-        // IMPORTANT:
-        // During flapping links, ESP-IDF can emit DISCONNECTED while the STA state machine
-        // is still mid-transition. Immediately calling WiFi.begin() again can produce:
-        //   "sta is connecting, return error"
-        // We keep a short "connect in progress" grace window so attemptReconnect() backs off.
+        logger.warn("NetworkManager: Disconnected from WiFi (reason=%d)",
+            (int)info.wifi_sta_disconnected.reason);
         nm._connectInProgress = true;
         nm._connectStartMs = millis();
         break;
@@ -574,7 +524,10 @@ void SMNetworkManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
         break;
 
     case ARDUINO_EVENT_WIFI_AP_STACONNECTED:
-        logger.info("NetworkManager: Client connected to AP");
+        logger.info("NetworkManager: Client connected to AP (MAC=%02X:%02X:%02X:%02X:%02X:%02X)",
+            info.wifi_ap_staconnected.mac[0], info.wifi_ap_staconnected.mac[1],
+            info.wifi_ap_staconnected.mac[2], info.wifi_ap_staconnected.mac[3],
+            info.wifi_ap_staconnected.mac[4], info.wifi_ap_staconnected.mac[5]);
         break;
 
     case ARDUINO_EVENT_WIFI_AP_STADISCONNECTED:
