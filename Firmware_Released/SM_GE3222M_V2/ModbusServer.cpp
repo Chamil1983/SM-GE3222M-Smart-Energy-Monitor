@@ -13,12 +13,9 @@ ModbusServer& ModbusServer::getInstance() {
 }
 
 ModbusServer::ModbusServer() 
-    : _tcpServer(nullptr),
-      _initialized(false),
-      _rtuEnabled(false),
-      _tcpEnabled(false),
-      _lastRTUActivity(0),
-      _lastTCPActivity(0) {
+    : _initialized(false)
+    , _rtuEnabled(false)
+    , _lastRTUActivity(0) {
     memset(_inputRegisters, 0, sizeof(_inputRegisters));
     memset(_holdingRegisters, 0, sizeof(_holdingRegisters));
     memset(_coils, 0, sizeof(_coils));
@@ -26,10 +23,6 @@ ModbusServer::ModbusServer()
 }
 
 ModbusServer::~ModbusServer() {
-    if (_tcpServer) {
-        delete _tcpServer;
-        _tcpServer = nullptr;
-    }
 }
 
 bool ModbusServer::begin(const ModbusConfig& config) {
@@ -38,7 +31,7 @@ bool ModbusServer::begin(const ModbusConfig& config) {
 
     
     const bool rtuEnabled = config.rtuEnabled;
-    const bool tcpEnabled = false; // Force Modbus TCP disabled (RTU-only requirement)
+    const bool tcpEnabled = false; // TCP removed in no-WiFi build
     Logger::getInstance().info("ModbusServer: Starting (RTU=%d, TCP=%d, SlaveID=%d, Baud=%d)",
         rtuEnabled, tcpEnabled, config.slaveID, config.baudrate);
     
@@ -69,13 +62,6 @@ bool ModbusServer::begin(const ModbusConfig& config) {
         _rtuEnabled = true;
 
         Logger::getInstance().info("ModbusServer: RTU started on Serial2 (baud=%d)", config.baudrate);
-    }
-    
-    if (tcpEnabled) {
-        _tcpServer = new WiFiServer(config.tcpPort);
-        _tcpServer->begin();
-        _tcpEnabled = true;
-        Logger::getInstance().info("ModbusServer: TCP started on port %d", config.tcpPort);
     }
     
     _initialized = true;
@@ -128,13 +114,8 @@ void ModbusServer::setupRegisters() {
 
 void ModbusServer::handle() {
     if (!_initialized) return;
-    
     if (_rtuEnabled) {
         handleRTU();
-    }
-    
-    if (_tcpEnabled) {
-        handleTCP();
     }
 }
 
@@ -142,28 +123,6 @@ void ModbusServer::handleRTU() {
     _modbusRTU.task();
 }
 
-void ModbusServer::handleTCP() {
-    if (!_tcpServer) return;
-    
-    if (_tcpServer->hasClient()) {
-        for (int i = 0; i < MAX_TCP_CLIENTS; i++) {
-            if (!_tcpClients[i] || !_tcpClients[i].connected()) {
-                if (_tcpClients[i]) _tcpClients[i].stop();
-                _tcpClients[i] = _tcpServer->available();
-                Logger::getInstance().info("ModbusServer: TCP client %d connected", i);
-                break;
-            }
-        }
-    }
-    
-    for (int i = 0; i < MAX_TCP_CLIENTS; i++) {
-        if (_tcpClients[i] && _tcpClients[i].connected()) {
-            if (_tcpClients[i].available()) {
-                _lastTCPActivity = millis();
-            }
-        }
-    }
-}
 
 void ModbusServer::updateMeterData(const MeterData& data) {
     _meterData = data;
@@ -564,17 +523,13 @@ void ModbusServer::updateSystemStatus(const SystemStatus& status) {
     _inputRegisters[MB_FREE_HEAP] = (status.freeHeap >> 16) & 0xFFFF;
     if (mbReady) _modbusRTU.Ireg(MB_FREE_HEAP, (status.freeHeap >> 16) & 0xFFFF);
     _inputRegisters[MB_FREE_HEAP + 1] = status.freeHeap & 0xFFFF;
-    if (mbReady) _modbusRTU.Ireg(MB_FREE_HEAP + 1, status.freeHeap & 0xFFFF);
-    
-    uint16_t statusFlags = 0;
-    if (status.wifiConnected) statusFlags |= STATUS_FLAG_WIFI_CONNECTED;
-    if (status.mqttConnected) statusFlags |= STATUS_FLAG_MQTT_CONNECTED;
+    if (mbReady) _modbusRTU.Ireg(MB_FREE_HEAP + 1, status.freeHeap & 0xFFFF);    uint16_t statusFlags = 0;
     if (status.modbusActive) statusFlags |= STATUS_FLAG_MODBUS_ACTIVE;
     _inputRegisters[MB_STATUS_FLAGS] = statusFlags;
     if (mbReady) _modbusRTU.Ireg(MB_STATUS_FLAGS, statusFlags);
     
-    _discreteInputs[MB_DI_WIFI_CONNECTED] = status.wifiConnected;
-    _discreteInputs[MB_DI_MQTT_CONNECTED] = status.mqttConnected;
+    _discreteInputs[MB_DI_WIFI_CONNECTED] = false;
+    _discreteInputs[MB_DI_MQTT_CONNECTED] = false;
 }
 
 void ModbusServer::float2registers(float value, uint16_t& highWord, uint16_t& lowWord) {

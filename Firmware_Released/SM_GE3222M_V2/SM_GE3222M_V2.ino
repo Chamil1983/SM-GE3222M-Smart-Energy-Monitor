@@ -8,8 +8,8 @@
  * Phase 1: HAL Initialization - Logger, GPIO, SPI, I2C, System Monitor, Watchdog
  * Phase 2: Storage - SPIFFS, NVS, Configuration Loading
  * Phase 3: Energy Metering - ATM90E36 Init, Calibration, Accumulator Restore
- * Phase 4: Network - WiFi STA/AP, mDNS, NTP
- * Phase 5: Communications - TCP, WebServer, Modbus, MQTT, OTA
+ * Phase 4: Network Layer Initialization - WiFi STA (fallback to AP)
+ * Phase 5: Communications - Modbus RTU + TCP Data Server
  * Phase 6: Task Launch - Create all FreeRTOS tasks
  */
 
@@ -19,7 +19,6 @@
 #include <Preferences.h>
 #include <nvs_flash.h>
 #include <DHT.h>
-#include <ESPmDNS.h>
 
 // Some ESP32 board definitions (e.g. some Visual Micro setups) may not define LED_BUILTIN.
 // GPIO2 is the usual on-board LED for ESP32 Dev Module.
@@ -51,16 +50,13 @@
 #include "DataLogger.h"
 
 // Network modules
-#include "NetworkManager.h"
-#include "OTAManager.h"
-#include "NTPSync.h"
+#include "SMNetworkManager.h"
 
 // Communication modules
-#include "TCPDataServer.h"
-#include "ProtocolV2.h"
-// Web interface removed (no HTTP/REST/WebSocket/SPIFFS UI)
+// Web interface (HTTP + SPIFFS dashboard)
+#include "WebUIManager.h"
 #include "ModbusServer.h"
-#include "MQTTPublisher.h"
+#include "TCPDataServer.h"
 
 // Core modules
 #include "TaskManager.h"
@@ -77,15 +73,6 @@
 static bool g_bootComplete = false;
 static ErrorCode g_lastError = ErrorCode::NONE;
 static uint32_t g_bootStartTime = 0;
-
-// Optional compile-time STA fallback credentials.
-// Leave empty to require credentials from ConfigManager (NVS).
-#ifndef FALLBACK_STA_SSID
-#define FALLBACK_STA_SSID ""
-#endif
-#ifndef FALLBACK_STA_PASSWORD
-#define FALLBACK_STA_PASSWORD ""
-#endif
 
 // ============================================================================
 // BOOT PHASE HELPERS
@@ -237,26 +224,16 @@ bool initPhase2_Storage() {
     }
     checkBootStep("Config Manager Init", true);
     
-    // Load all configurations
-    WiFiConfig wifiConfig;
+    // Load required configurations
     ModbusConfig modbusConfig;
-    MQTTConfig mqttConfig;
-    NetworkConfig networkConfig;
     SystemConfig systemConfig;
-    
-    ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
+
     ConfigManager::getInstance().loadModbusConfig(modbusConfig);
-    ConfigManager::getInstance().loadMQTTConfig(mqttConfig);
-    ConfigManager::getInstance().loadNetworkConfig(networkConfig);
     ConfigManager::getInstance().loadSystemConfig(systemConfig);
-    
-    checkBootStep("WiFi Config Loaded", true);
+
     checkBootStep("Modbus Config Loaded", true);
-    checkBootStep("MQTT Config Loaded", true);
-    checkBootStep("Network Config Loaded", true);
     checkBootStep("System Config Loaded", true);
-    
-    // Initialize Data Logger
+// Initialize Data Logger
     // Initialize Data Logger with a safe default (avoid heap exhaustion when PSRAM is not present)
     size_t logEntries = psramFound() ? 400 : 200;
     bool dlOk = DataLogger::getInstance().init((uint16_t)logEntries);
@@ -341,155 +318,78 @@ Serial.printf("    Totals: P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f F=%.2fHz\n",
 }
 
 // ============================================================================
-// PHASE 4: NETWORK INITIALIZATION
+// PHASE 4: NETWORK LAYER INITIALIZATION (WiFi STA -> AP fallback)
 // ============================================================================
 bool initPhase4_Network() {
     printBootPhase("4", "Network Layer Initialization");
-    
-    // Initialize Network Manager
-    WiFiConfig wifiConfig;
-    ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
-    if (!SMNetworkManager::getInstance().init(wifiConfig)) {
-        Serial.println("  WARNING: WiFi init failed, continuing...");
-    }
-    checkBootStep("Network Manager Init", true);
-    
 
-    // Phase 4 WiFi stability plan:
-    //  - startAP()  is AP-only and stable (no mode switching after it starts)
-    //  - startSTA() is STA-only (no management AP)
-    //  - Boot logic: AP-only requested -> start AP-only
-    //               else try STA; if STA fails -> fall back to AP-only (channel 1..11)
-    bool wifiOk = false;
+    // Start WiFi using SMNetworkManager (STA first, fallback to AP)
+    networkManager.begin();
 
-    // Prefer DHCP for STA (more robust for most field networks)
-    wifiConfig.useDHCP = true;
+    bool connected = networkManager.isConnected();
+    bool apMode = networkManager.isAPMode();
+    bool staMode = networkManager.isSTAMode();
 
-    // If NVS has no SSID but a compile-time fallback is set, use it.
-    if (strlen(wifiConfig.ssid) == 0 && (sizeof(FALLBACK_STA_SSID) > 1)) {
-        strncpy(wifiConfig.ssid, FALLBACK_STA_SSID, sizeof(wifiConfig.ssid) - 1);
-        wifiConfig.ssid[sizeof(wifiConfig.ssid) - 1] = '\0';
-        strncpy(wifiConfig.password, FALLBACK_STA_PASSWORD, sizeof(wifiConfig.password) - 1);
-        wifiConfig.password[sizeof(wifiConfig.password) - 1] = '\0';
-        Serial.printf("  INFO: Using compile-time fallback SSID: %s\n", wifiConfig.ssid);
-    }
-
-    const char* apSSID = wifiConfig.apSsid;
-    const char* apPASS = wifiConfig.apPassword;
-
-    if (wifiConfig.apMode) {
-        // Explicit AP-only requested
-        wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
-        Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
-    } else if (strlen(wifiConfig.ssid) > 0) {
-        // Try STA-only first
-        Serial.printf("  STA-only Mode: Connecting to %s (DHCP)...\n", wifiConfig.ssid);
-        delay(150);
-        wifiOk = SMNetworkManager::getInstance().startSTA();
-
-        // Wait for STA connect (bounded)
-        const uint32_t t0 = millis();
-        const uint32_t timeoutMs = 15000;
-        while (wifiOk && !SMNetworkManager::getInstance().isConnected() && (millis() - t0) < timeoutMs) {
-            delay(200);
-            yield();
-        }
-
-        if (wifiOk && SMNetworkManager::getInstance().isConnected()) {
-            Serial.printf("  STA Connected: IP=%s RSSI=%ddBm\n",
-                          SMNetworkManager::getInstance().getLocalIP().c_str(),
-                          SMNetworkManager::getInstance().getRSSI());
-        } else {
-            // STA failed -> stable AP-only fallback
-            Serial.println("  WARNING: STA connect failed, falling back to AP-only...");
-            SMNetworkManager::getInstance().stop();
-            wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
-            Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
-        }
+    if (staMode && connected) {
+        checkBootStep("WiFi STA Connected", true);
+        Serial.printf("  STA IP: %s\n", networkManager.getIPAddress().c_str());
+    } else if (apMode && connected) {
+        checkBootStep("WiFi AP Started (Setup)", true);
+        Serial.printf("  AP SSID: %s\n", networkManager.getSSID().c_str());
+        Serial.printf("  AP IP: %s\n", networkManager.getIPAddress().c_str());
     } else {
-        // No SSID configured -> AP-only fallback
-        Serial.println("  INFO: No STA SSID configured, starting AP-only...");
-        wifiOk = SMNetworkManager::getInstance().startAP(apSSID, apPASS);
-        Serial.printf("  AP-only Mode: %s (IP: 192.168.4.1)\n", apSSID);
+        printBootOptionalStep("WiFi Network (disabled / failed)", false);
     }
 
-    checkBootStep("WiFi Started", wifiOk);
-    
-    // Initialize mDNS
-    NetworkConfig netConfig;
-    ConfigManager::getInstance().loadNetworkConfig(netConfig);
-    if (netConfig.mdnsEnabled) {
-        // Use WiFi hostname as the mDNS hostname.
-        if (MDNS.begin(wifiConfig.hostname)) {
-            // No HTTP server in this build; advertise only generic TCP service(s)
-            MDNS.addService("tcpdata", "tcp", 8088);
-            checkBootStep("mDNS Started", true);
-        }
-    }
-    
-    // Initialize NTP
-    if (netConfig.ntpEnabled) {
-        NTPSync::getInstance().init(netConfig.ntpServer, netConfig.timezoneOffset);
-        checkBootStep("NTP Sync Started", true);
-    }
-    
+    // Publish status to SystemMonitor
+    SystemMonitor::getInstance().setNetworkStatus(connected, apMode, staMode, false, false);
+
     return true;
 }
 
 // ============================================================================
-// PHASE 5: COMMUNICATIONS INITIALIZATION
+// PHASE 5: COMMUNICATIONS INITIALIZATION (Modbus RTU + TCP JSON)
 // ============================================================================
 bool initPhase5_Communications() {
     printBootPhase("5", "Communication Protocols Initialization");
-    
-    // Initialize TCP Data Server (V1 compatible)
-    bool tcpOk = TCPDataServer::getInstance().begin(8088);
-    if (!tcpOk) {
-        Serial.println("  WARNING: TCP Server init failed");
-    }
-    checkBootStep("TCP Data Server (port 8088)", tcpOk);
 
-    
-    // Web interface intentionally removed in this build.
-    // WiFi is still available for future BACnet/TCP/IP transport and OTA (if enabled).
+    // Modbus RTU
+    ModbusConfig modbusConfig;
+    ConfigManager::getInstance().loadModbusConfig(modbusConfig);
 
-    // Initialize Modbus Server (RTU ONLY - TCP disabled by requirement)
-ModbusConfig modbusConfig;
-ConfigManager::getInstance().loadModbusConfig(modbusConfig);
-modbusConfig.tcpEnabled = false; // enforce RTU-only
-if (!ModbusServer::getInstance().begin(modbusConfig)) {
-    Serial.println("  WARNING: Modbus init failed");
-}
-if (modbusConfig.rtuEnabled) {
-    checkBootStep("Modbus RTU (Serial2, baud configured)", true);
-}
-// Initialize MQTT Publisher
-    MQTTConfig mqttConfig;
-    ConfigManager::getInstance().loadMQTTConfig(mqttConfig);
-    if (mqttConfig.enabled) {
-        if (!MQTTPublisher::getInstance().begin(mqttConfig)) {
-            Serial.println("  WARNING: MQTT init failed");
-        }
-        checkBootStep("MQTT Publisher", true);
-    } else {
-        checkBootStep("MQTT Publisher (disabled)", true);
+    bool modbusOk = ModbusServer::getInstance().begin(modbusConfig);
+    if (!modbusOk) {
+        Serial.println("  WARNING: Modbus init failed");
     }
-    
-    // Initialize OTA Manager
-    SystemConfig sysConfig;
-    ConfigManager::getInstance().loadSystemConfig(sysConfig);
-    if (sysConfig.otaEnabled) {
-        // Hostname comes from WiFiConfig; password from SystemConfig.
-        WiFiConfig wifiConfig;
-        ConfigManager::getInstance().loadWiFiConfig(wifiConfig);
-        if (!OTAManager::getInstance().begin(wifiConfig.hostname, sysConfig.otaPassword)) {
-            Serial.println("  WARNING: OTA init failed");
-        }
-        checkBootStep("OTA Manager", true);
-    } else {
-        checkBootStep("OTA Manager (disabled)", true);
+    if (modbusConfig.rtuEnabled) {
+        checkBootStep("Modbus RTU (Serial2, baud configured)", modbusOk);
     }
-    
+    SystemMonitor::getInstance().setModbusActive(modbusOk);
+
+    // Web UI (HTTP + SPIFFS dashboard + WiFi setup page)
+    bool webOk = WebUIManager::getInstance().begin(80);
+    if (webOk) {
+        checkBootStep("Web UI HTTP Server (port 80)", true);
+    } else {
+        printBootOptionalStep("Web UI HTTP Server (disabled / failed)", false);
+    }
+
+    // TCP JSON server (WiFi only)
+    // Default to port 8080 unless config says otherwise
+    uint16_t tcpPort = 8080;
+    if (modbusConfig.tcpPort > 0) tcpPort = modbusConfig.tcpPort; // reuse field if provided
+    bool tcpOk = TCPDataServer::getInstance().begin(tcpPort);
+    if (tcpOk) {
+        checkBootStep("TCP JSON Server (port configured)", true);
+        Serial.printf("  TCP Port: %u\n", (unsigned)tcpPort);
+    } else {
+        printBootOptionalStep("TCP JSON Server (disabled / failed)", false);
+    }
+
+    // Update status with TCP flag
+    SystemStatus st = SystemMonitor::getInstance().getSystemStatus();
+    SystemMonitor::getInstance().setNetworkStatus(st.wifiConnected, st.wifiAPMode, st.wifiSTAMode, tcpOk, st.mqttConnected);
+
     return true;
 }
 
@@ -498,21 +398,18 @@ if (modbusConfig.rtuEnabled) {
 // ============================================================================
 bool initPhase6_Tasks() {
     printBootPhase("6", "FreeRTOS Task Creation");
-    
-    // Create all tasks via TaskManager
+
     if (!TaskManager::getInstance().createAllTasks()) {
         return checkBootStatus("Task Creation", false);
     }
-    
-    // List of tasks created:
+
     checkBootStep("EnergyTask (Core 1, Priority 5, 500ms)", true);
     checkBootStep("AccumulatorTask (Core 1, Priority 4, 1000ms)", true);
     checkBootStep("ModbusTask (Core 1, Priority 3, 10ms poll)", true);
-    printBootOptionalStep("TCPServerTask (Core 0, Priority 3, event-driven)", TaskManager::getInstance().isTCPServerTaskRunning());
-    // WebServerTask removed
-    printBootOptionalStep("MQTTTask (Core 0, Priority 2, configurable)", TaskManager::getInstance().getMQTTTaskHandle() != nullptr);
+    printBootOptionalStep("TCPServerTask (Core 0, Priority 2, 20ms poll)", TaskManager::getInstance().isTCPServerTaskRunning());
+    printBootOptionalStep("MQTTTask (stub)", TaskManager::getInstance().getMQTTTaskHandle() != nullptr);
     printBootOptionalStep("DiagnosticsTask (Core 0, Priority 1, 5000ms)", TaskManager::getInstance().getDiagnosticsTaskHandle() != nullptr);
-    
+
     return true;
 }
 
@@ -542,9 +439,9 @@ void setup() {
         g_lastError = ErrorCode::NETWORK_INIT_FAILED;
         return;
     }
-    
+
     if (!initPhase5_Communications()) {
-        g_lastError = ErrorCode::TCP_SERVER_ERROR;
+        g_lastError = ErrorCode::MODBUS_INIT_ERROR;
         return;
     }
     
@@ -579,26 +476,10 @@ void setup() {
 // LOOP - Minimal main loop (tasks handle most work)
 // ============================================================================
 void loop() {
-    // In FreeRTOS-based design, most work is done in tasks
-    // Main loop only handles OTA and minimal housekeeping
-    
-    // Handle OTA updates
-    OTAManager::getInstance().handle();
-    
-    // Handle network manager (reconnection logic)
-    SMNetworkManager::getInstance().handle();
-
-    // Fallback servicing: if optional protocol tasks could not be created due to low heap,
-    // service them here in the Arduino loop (prevents boot failure / watchdog resets).
-    if (!TaskManager::getInstance().isTCPServerTaskRunning()) {
-        TCPDataServer::getInstance().handle();
-    }
-    
-    // Note: Task Watchdog is fed by subscribed FreeRTOS tasks.
-    // Calling esp_task_wdt_reset() from loopTask when it isn't registered produces
-    // "task not found" spam and can stall the UI/menu.
-    // So we do NOT feed the watchdog from loop().
-    
-    // Small delay to prevent watchdog issues
-    delay(10);
+    // Keep captive portal DNS responsive and monitor WiFi.
+    networkManager.loop();
+    WebUIManager::getInstance().loop();
+    // FreeRTOS tasks handle all runtime processing.
+    // Keep the Arduino loop idle to minimize jitter and watchdog interactions.
+    delay(50);
 }

@@ -15,13 +15,7 @@ class ConfigManager {
 public:
     static ConfigManager& getInstance();
     
-    bool init();
-    
-    // WiFi Configuration
-    bool loadWiFiConfig(WiFiConfig& config);
-    bool saveWiFiConfig(const WiFiConfig& config);
-    
-    // Modbus Configuration
+    bool init();// Modbus Configuration
     bool loadModbusConfig(ModbusConfig& config);
     bool saveModbusConfig(const ModbusConfig& config);
     
@@ -41,15 +35,10 @@ public:
     bool factoryReset();
     
     // Check if configs exist
-    bool hasWiFiConfig();
     bool hasModbusConfig();
     bool hasMQTTConfig();
     bool hasNetworkConfig();
-    bool hasSystemConfig();
-
-    // Compatibility helpers for ProtocolV2 naming
-    bool getWiFiConfig(WiFiConfig& config) { return loadWiFiConfig(config); }
-    bool setWiFiConfig(const WiFiConfig& config) { return saveWiFiConfig(config); }
+    bool hasSystemConfig();    // Compatibility helpers for ProtocolV2 naming
     bool getModbusConfig(ModbusConfig& config) { return loadModbusConfig(config); }
     bool setModbusConfig(const ModbusConfig& config) { return saveModbusConfig(config); }
     bool getMQTTConfig(MQTTConfig& config) { return loadMQTTConfig(config); }

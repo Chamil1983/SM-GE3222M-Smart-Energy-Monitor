@@ -5,7 +5,6 @@
 
 #include "SystemMonitor.h"
 #include "Logger.h"
-#include "NetworkManager.h"
 #include "TaskManager.h"
 #include <esp_heap_caps.h>
 #include <Preferences.h>
@@ -67,7 +66,6 @@ void SystemMonitor::update() {
     if (xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         updateHeapMetrics();
         updateCpuMetrics();
-        updateNetworkMetrics();
         updateTaskMetrics();
         
         _status.uptime = (millis() - _bootTime) / 1000;
@@ -99,13 +97,6 @@ void SystemMonitor::updateCpuMetrics() {
 #endif
 }
 
-void SystemMonitor::updateNetworkMetrics() {
-    SMNetworkManager& netMgr = SMNetworkManager::getInstance();
-    _status.wifiConnected = netMgr.isConnected();
-    
-    // MQTT status would be set externally by MQTTPublisher
-    // _status.mqttConnected is set via external call
-}
 
 void SystemMonitor::updateTaskMetrics() {
     // Task metrics can be queried on-demand via getTaskStackWatermark()
@@ -164,6 +155,25 @@ void SystemMonitor::setLastError(ErrorCode error) {
     }
 }
 
+
+void SystemMonitor::setModbusActive(bool active) {
+    if (_initialized && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        _status.modbusActive = active;
+        xSemaphoreGive(_mutex);
+    }
+}
+
+void SystemMonitor::setNetworkStatus(bool wifiConnected, bool apMode, bool staMode, bool tcpServerActive, bool mqttConnected) {
+    if (_initialized && xSemaphoreTake(_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        _status.wifiConnected = wifiConnected;
+        _status.wifiAPMode = apMode;
+        _status.wifiSTAMode = staMode;
+        _status.tcpServerActive = tcpServerActive;
+        _status.mqttConnected = mqttConnected;
+        xSemaphoreGive(_mutex);
+    }
+}
+
 uint32_t SystemMonitor::getFreeHeap() const {
     return _status.freeHeap;
 }
@@ -180,9 +190,6 @@ uint32_t SystemMonitor::getUptime() const {
     return _status.uptime;
 }
 
-int SystemMonitor::getRSSI() const {
-    return SMNetworkManager::getInstance().getRSSI();
-}
 
 uint16_t SystemMonitor::getErrorCount() const {
     return _status.errorCount;

@@ -13,7 +13,6 @@
 
 #include <Arduino.h>
 #include <HardwareSerial.h>
-#include <WiFi.h>
 #include <ModbusRTU.h>
 #include "DataTypes.h"
 #include "ModbusMap.h"
@@ -40,7 +39,6 @@ private:
     
     void setupRegisters();
     void handleRTU();
-    void handleTCP();
     
     void float2registers(float value, uint16_t& highWord, uint16_t& lowWord);
     float registers2float(uint16_t highWord, uint16_t lowWord);
@@ -53,13 +51,10 @@ private:
     bool readDiscreteInput(uint16_t address);
     
     ModbusRTU _modbusRTU;
-    WiFiServer* _tcpServer;
-    WiFiClient _tcpClients[4];
     
     ModbusConfig _config;
     bool _initialized;
     bool _rtuEnabled;
-    bool _tcpEnabled;
     
     uint16_t _inputRegisters[MB_INPUT_REG_COUNT];
     uint16_t _holdingRegisters[MB_HOLDING_REG_COUNT];
@@ -70,10 +65,7 @@ private:
     SystemStatus _systemStatus;
     
     unsigned long _lastRTUActivity;
-    unsigned long _lastTCPActivity;
     
-    static constexpr uint16_t TCP_TIMEOUT_MS = 30000;
-    static constexpr uint8_t MAX_TCP_CLIENTS = 4;
 };
 
 #endif // MODBUSSERVER_H

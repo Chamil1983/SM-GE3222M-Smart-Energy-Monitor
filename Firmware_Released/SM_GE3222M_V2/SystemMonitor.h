@@ -26,13 +26,13 @@ public:
     void incrementErrorCount();
     void resetErrorCount();
     void setLastError(ErrorCode error);
+    void setModbusActive(bool active);
+    void setNetworkStatus(bool wifiConnected, bool apMode, bool staMode, bool tcpServerActive, bool mqttConnected);
     
     uint32_t getFreeHeap() const;
     uint32_t getMinFreeHeap() const;
     uint8_t getCpuFreqMHz() const;
-    uint32_t getUptime() const;
-    int getRSSI() const;
-    uint16_t getErrorCount() const;
+    uint32_t getUptime() const;    uint16_t getErrorCount() const;
     
     UBaseType_t getTaskStackWatermark(TaskHandle_t taskHandle) const;
     
@@ -43,9 +43,7 @@ private:
     SystemMonitor& operator=(const SystemMonitor&) = delete;
     
     void updateHeapMetrics();
-    void updateCpuMetrics();
-    void updateNetworkMetrics();
-    void updateTaskMetrics();
+    void updateCpuMetrics();    void updateTaskMetrics();
     
     SystemStatus _status;
     SemaphoreHandle_t _mutex;

@@ -214,45 +214,10 @@ struct CalibrationConfig {
 };
 
 // ============================================================================
-// WIFI CONFIGURATION STRUCTURE
+// WIFI CONFIGURATION (REMOVED)
 // ============================================================================
-struct WiFiConfig {
-    bool    enabled;
-    bool    apMode;             // true=AP mode, false=STA mode
-    char    ssid[33];           // SSID (max 32 chars + null)
-    char    password[64];       // Password (max 63 chars + null)
-    char    hostname[33];       // Hostname
-    
-    // Static IP (if not DHCP)
-    bool    useDHCP;
-    uint8_t staticIP[4];        // Static IP address
-    uint8_t gateway[4];         // Gateway address
-    uint8_t subnet[4];          // Subnet mask
-    uint8_t dns1[4];            // Primary DNS
-    uint8_t dns2[4];            // Secondary DNS
-    // AP Mode settings
-    char    apSsid[33];        // SoftAP SSID (max 32 chars + null)
-    char    apPassword[64];    // SoftAP Password (>=8 chars for WPA2)
-    char    apMac[18];         // SoftAP MAC as string (AA:BB:CC:DD:EE:FF)
-
-    WiFiConfig() {
-        enabled = true;
-        apMode = false;
-        useDHCP = true;
-        strcpy(ssid, ""); // STA SSID (set via NVS)
-        strcpy(password, ""); // STA password
-        strcpy(apSsid, "SM_GE3222M_Setup");
-        strcpy(apPassword, "12345678");
-        strcpy(apMac, "C8:2E:A3:F5:7D:DC");
-        strcpy(hostname, "ge3222m");
-        memset(staticIP, 0, sizeof(staticIP));
-        memset(gateway, 0, sizeof(gateway));
-        memset(subnet, 0, sizeof(subnet));
-        memset(dns1, 0, sizeof(dns1));
-        memset(dns2, 0, sizeof(dns2));
-    }
-};
-
+// WiFi STA/AP functionality has been removed in this build.
+//
 // ============================================================================
 // MODBUS CONFIGURATION STRUCTURE
 // ============================================================================
@@ -401,9 +366,12 @@ struct SystemStatus {
     uint16_t errorCount;        // Total error count
     ErrorCode lastError;        // Last error code
     uint32_t bootCount;         // Number of boots
-    bool     wifiConnected;
-    bool     mqttConnected;
     bool     modbusActive;
+    bool     wifiConnected;
+    bool     wifiAPMode;
+    bool     wifiSTAMode;
+    bool     tcpServerActive;
+    bool     mqttConnected;
     
     SystemStatus() {
         memset(this, 0, sizeof(SystemStatus));

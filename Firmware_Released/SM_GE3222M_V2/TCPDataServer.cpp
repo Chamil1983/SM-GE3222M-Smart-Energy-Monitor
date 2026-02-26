@@ -353,8 +353,8 @@ String TCPDataServer::buildV1SystemInfo() {
     output += "Uptime:" + String(status.uptime) + "\r\n";
     output += "FreeHeap:" + String(status.freeHeap) + "\r\n";
     output += "CPUTemp:" + String(status.cpuTemperature, 1) + "\r\n";
-    output += "WiFi:" + String(status.wifiConnected ? "1" : "0") + "\r\n";
-    output += "MQTT:" + String(status.mqttConnected ? "1" : "0") + "\r\n";
+    //output += "WiFi:" + String(status.wifiConnected ? "1" : "0") + "\r\n";
+    //output += "MQTT:" + String(status.mqttConnected ? "1" : "0") + "\r\n";
     output += "Errors:" + String(status.errorCount) + "\r\n";
     
     return output;

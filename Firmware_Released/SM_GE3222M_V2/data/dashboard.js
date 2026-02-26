@@ -95,9 +95,11 @@ function updateConnectionStatus(connected) {
     if (connected) {
         statusIndicator.className = 'status-indicator connected';
         statusText.textContent = 'Connected';
+        stopPolling();
     } else {
         statusIndicator.className = 'status-indicator disconnected';
         statusText.textContent = 'Disconnected';
+        startPolling();
     }
 }
 

@@ -12,7 +12,6 @@
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_task_wdt.h>
 #endif
-#include "MQTTPublisher.h"
 #include "ConfigManager.h"
 #include "EventBus.h"
 #include "WatchdogManager.h"
@@ -29,7 +28,7 @@ TaskManager::TaskManager()
     , _tcpServerTask(nullptr)
     , _mqttTask(nullptr)
     , _diagnosticsTask(nullptr)
-    , _tasksRunning(false), _tcpTaskOptionalFailed(false) {
+    , _tasksRunning(false) {
 }
 
 TaskManager::~TaskManager() {
@@ -94,44 +93,25 @@ bool TaskManager::createAllTasks() {
         return false;
     }
     Logger::getInstance().info("TaskManager: Created ModbusTask on Core 1");
-    
-    // Create TCP Server Task (Core 0, Priority 3) - OPTIONAL (falls back to loop polling)
+
+    // Create TCP Server Task (Core 0, Priority 2)
     result = xTaskCreatePinnedToCore(
         tcpServerTaskFunc,
         "TCPServerTask",
-        TCP_STACK_SIZE,
+        TCP_SERVER_STACK_SIZE,
         nullptr,
-        TCP_PRIORITY,
+        TCP_SERVER_PRIORITY,
         &_tcpServerTask,
         CORE_0
     );
 
     if (result != pdPASS) {
         _tcpServerTask = nullptr;
-        _tcpTaskOptionalFailed = true;
-        Logger::getInstance().error("TaskManager: Failed to create TCPServerTask (optional) - will service TCP in loop()");
+        Logger::getInstance().warn("TaskManager: Failed to create TCPServerTask (optional) - TCP server task disabled");
     } else {
         Logger::getInstance().info("TaskManager: Created TCPServerTask on Core 0");
     }
-    
-    // Create MQTT Task (Core 0, Priority 2) - OPTIONAL
-    result = xTaskCreatePinnedToCore(
-        mqttTaskFunc,
-        "MQTTTask",
-        MQTT_STACK_SIZE,
-        nullptr,
-        MQTT_PRIORITY,
-        &_mqttTask,
-        CORE_0
-    );
 
-    if (result != pdPASS) {
-        _mqttTask = nullptr;
-        Logger::getInstance().warn("TaskManager: Failed to create MQTTTask (optional) - MQTT task disabled");
-    } else {
-        Logger::getInstance().info("TaskManager: Created MQTTTask on Core 0");
-    }
-    
     // Create Diagnostics Task (Core 0, Priority 1) - OPTIONAL
     result = xTaskCreatePinnedToCore(
         diagnosticsTaskFunc,
@@ -166,12 +146,12 @@ void TaskManager::stopAllTasks() {
         vTaskDelete(_diagnosticsTask);
         _diagnosticsTask = nullptr;
     }
-    
+
     if (_mqttTask) {
         vTaskDelete(_mqttTask);
         _mqttTask = nullptr;
     }
-    
+
     if (_tcpServerTask) {
         vTaskDelete(_tcpServerTask);
         _tcpServerTask = nullptr;
@@ -265,43 +245,28 @@ void TaskManager::modbusTaskFunc(void* param) {
     }
 }
 
+
+
+
 void TaskManager::tcpServerTaskFunc(void* param) {
-    Logger::getInstance().info("TCPServerTask: Started (event-driven)");
-    TCPDataServer& tcpServer = TCPDataServer::getInstance();
-    
+    Logger::getInstance().info("TCPServerTask: Started (20ms poll)");
+    TCPDataServer& server = TCPDataServer::getInstance();
+
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    const TickType_t interval = pdMS_TO_TICKS(20);
+
     while (true) {
-        tcpServer.handle();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        // handle() is safe even if begin() wasn't called; it will just do nothing.
+        server.handle();
+        vTaskDelayUntil(&lastWakeTime, interval);
     }
 }
 
 void TaskManager::mqttTaskFunc(void* param) {
-    Logger::getInstance().info("MQTTTask: Started");
-    MQTTPublisher& mqtt = MQTTPublisher::getInstance();
-    EnergyMeter& meter = EnergyMeter::getInstance();
-    ConfigManager& config = ConfigManager::getInstance();
-    
+    // Placeholder to keep API compatibility; MQTT can be added/enabled later.
+    Logger::getInstance().info("MQTTTask: Started (disabled stub)");
     while (true) {
-        mqtt.handle();
-        
-        if (mqtt.isConnected()) {
-            MQTTConfig mqttConfig;
-            if (!config.getMQTTConfig(mqttConfig)) {
-                Logger::getInstance().warn("MQTTTask: Failed to load MQTT config, using defaults");
-            }
-
-            uint32_t interval = mqttConfig.publishInterval * 1000;
-            
-            static uint32_t lastPublish = 0;
-            uint32_t now = millis();
-            
-            if (now - lastPublish >= interval) {
-                MeterData data = meter.getSnapshot();
-                mqtt.publish(data);
-                lastPublish = now;
-            }
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 

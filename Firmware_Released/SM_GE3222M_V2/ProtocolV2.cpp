@@ -3,6 +3,7 @@
 #include "EnergyMeter.h"
 #include "SystemMonitor.h"
 #include "ConfigManager.h"
+#include "SMNetworkManager.h"
 #include "CalibrationManager.h"
 #include "DataLogger.h"
 
@@ -314,13 +315,16 @@ void ProtocolV2::systemStatusToJson(const SystemStatus& status, JsonDocument& do
     doc["lastError"] = static_cast<uint16_t>(status.lastError);
     doc["bootCount"] = status.bootCount;
     doc["wifiConnected"] = status.wifiConnected;
+    doc["wifiAPMode"] = status.wifiAPMode;
+    doc["wifiSTAMode"] = status.wifiSTAMode;
+    doc["tcpServerActive"] = status.tcpServerActive;
     doc["mqttConnected"] = status.mqttConnected;
     doc["modbusActive"] = status.modbusActive;
 }
 
 void ProtocolV2::configToJson(JsonDocument& doc) {
     SystemConfig sysCfg;
-    WiFiConfig wifiCfg;
+    //WiFiConfig wifiCfg;
     ModbusConfig modbusCfg;
     MQTTConfig mqttCfg;
     NetworkConfig netCfg;
@@ -338,14 +342,23 @@ void ProtocolV2::configToJson(JsonDocument& doc) {
         sys["watchdogEnabled"] = sysCfg.watchdogEnabled;
         sys["watchdogTimeout"] = sysCfg.watchdogTimeout;
     }
-    
-    if (cfg.getWiFiConfig(wifiCfg)) {
+    // WiFi (SMNetworkManager)
+    {
+        WiFiConfig w = networkManager.getConfig();
         JsonObject wifi = doc.createNestedObject("wifi");
-        wifi["enabled"] = wifiCfg.enabled;
-        wifi["apMode"] = wifiCfg.apMode;
-        wifi["ssid"] = wifiCfg.ssid;
-        wifi["hostname"] = wifiCfg.hostname;
-        wifi["useDHCP"] = wifiCfg.useDHCP;
+        wifi["apMode"] = networkManager.isAPMode();
+        wifi["staMode"] = networkManager.isSTAMode();
+        wifi["connected"] = networkManager.isConnected();
+        wifi["ssid"] = w.ssid;
+        wifi["passwordSet"] = (w.pass.length() > 0);
+        wifi["useDHCP"] = w.useDHCP;
+        wifi["ip"] = w.ip;
+        wifi["gw"] = w.gw;
+        wifi["sn"] = w.sn;
+        wifi["dns1"] = w.dns1;
+        wifi["dns2"] = w.dns2;
+        wifi["apSSID"] = String(AP_SSID);
+        wifi["apIP"] = String(AP_IP_ADDR);
     }
     
     if (cfg.getModbusConfig(modbusCfg)) {
@@ -388,17 +401,27 @@ bool ProtocolV2::jsonToConfig(const JsonDocument& doc) {
     }
     
     if (doc.containsKey("wifi")) {
-        WiFiConfig wifiCfg;
-        if (cfg.getWiFiConfig(wifiCfg)) {
-            JsonObjectConst wifi = doc["wifi"].as<JsonObjectConst>();
-            if (wifi.containsKey("enabled")) wifiCfg.enabled = wifi["enabled"];
-            if (wifi.containsKey("ssid")) strncpy(wifiCfg.ssid, wifi["ssid"], sizeof(wifiCfg.ssid));
-            if (wifi.containsKey("password")) strncpy(wifiCfg.password, wifi["password"], sizeof(wifiCfg.password));
-            if (wifi.containsKey("hostname")) strncpy(wifiCfg.hostname, wifi["hostname"], sizeof(wifiCfg.hostname));
-            
-            success &= cfg.setWiFiConfig(wifiCfg);
+        WiFiConfig w = networkManager.getConfig();
+        JsonObjectConst wifi = doc["wifi"].as<JsonObjectConst>();
+        if (wifi.containsKey("ssid")) w.ssid = String((const char*)wifi["ssid"]);
+        if (wifi.containsKey("pass")) w.pass = String((const char*)wifi["pass"]);
+        if (wifi.containsKey("password")) w.pass = String((const char*)wifi["password"]);
+        if (wifi.containsKey("useDHCP")) w.useDHCP = wifi["useDHCP"];
+        if (wifi.containsKey("ip")) w.ip = String((const char*)wifi["ip"]);
+        if (wifi.containsKey("gw")) w.gw = String((const char*)wifi["gw"]);
+        if (wifi.containsKey("sn")) w.sn = String((const char*)wifi["sn"]);
+        if (wifi.containsKey("dns1")) w.dns1 = String((const char*)wifi["dns1"]);
+        if (wifi.containsKey("dns2")) w.dns2 = String((const char*)wifi["dns2"]);
+        bool save = true;
+        if (wifi.containsKey("save")) save = wifi["save"];
+        networkManager.applyConfig(w, save);
+        bool applyNow = true;
+        if (wifi.containsKey("applyNow")) applyNow = wifi["applyNow"];
+        if (applyNow) {
+            networkManager.reconnectSTA();
         }
     }
+
     
     if (doc.containsKey("mqtt")) {
         MQTTConfig mqttCfg;

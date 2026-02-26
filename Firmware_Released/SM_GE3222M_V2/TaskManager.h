@@ -9,11 +9,8 @@
  * Core 1 (Energy & Modbus):
  *   - EnergyTask: Read ATM90E36, update meter (500ms, P5)
  *   - AccumulatorTask: Update energy accumulator, auto-save (1000ms, P4)
- *   - ModbusTask: Handle Modbus RTU/TCP (10ms poll, P3)
  * 
  * Core 0 (Communications & Diagnostics):
- *   - TCPServerTask: Handle TCP data server (event-driven, P3)
- *   - MQTTTask: Handle MQTT publishing (configurable, P2)
  *   - DiagnosticsTask: System monitoring, logging (5000ms, P1)
  */
 
@@ -31,7 +28,6 @@ public:
     static TaskManager& getInstance();
     
     bool createAllTasks();
-    bool isTCPServerTaskRunning() const { return _tcpServerTask != nullptr; }
 
     void stopAllTasks();
     
@@ -42,6 +38,7 @@ public:
     TaskHandle_t getModbusTaskHandle() const { return _modbusTask; }
     TaskHandle_t getTCPServerTaskHandle() const { return _tcpServerTask; }
     TaskHandle_t getMQTTTaskHandle() const { return _mqttTask; }
+    bool isTCPServerTaskRunning() const { return _tcpServerTask != nullptr; }
     TaskHandle_t getDiagnosticsTaskHandle() const { return _diagnosticsTask; }
     
 private:
@@ -65,7 +62,6 @@ private:
     TaskHandle_t _diagnosticsTask;
     
     bool _tasksRunning;
-    bool _tcpTaskOptionalFailed;
     // Web interface/task removed in this build.
 
     
@@ -73,15 +69,15 @@ private:
     static constexpr uint32_t ENERGY_STACK_SIZE = 4096;
     static constexpr uint32_t ACCUMULATOR_STACK_SIZE = 4096;
     static constexpr uint32_t MODBUS_STACK_SIZE = 4096;
-    static constexpr uint32_t TCP_STACK_SIZE = 4096;
-    static constexpr uint32_t MQTT_STACK_SIZE = 3072;
+    static constexpr uint32_t TCP_SERVER_STACK_SIZE = 4096;
+    static constexpr uint32_t MQTT_STACK_SIZE = 4096;
     static constexpr uint32_t DIAGNOSTICS_STACK_SIZE = 3072;
     
     // Task priorities (higher = more important)
     static constexpr UBaseType_t ENERGY_PRIORITY = 5;
     static constexpr UBaseType_t ACCUMULATOR_PRIORITY = 4;
     static constexpr UBaseType_t MODBUS_PRIORITY = 3;
-    static constexpr UBaseType_t TCP_PRIORITY = 3;
+    static constexpr UBaseType_t TCP_SERVER_PRIORITY = 2;
     static constexpr UBaseType_t MQTT_PRIORITY = 2;
     static constexpr UBaseType_t DIAGNOSTICS_PRIORITY = 1;
     
