@@ -177,7 +177,7 @@
             </div>
         </section>
 
-        <!-- System Info -->
+        <!-- System Info + DHT22 Ambient -->
         <section class="info-section">
             <div class="info-card">
                 <h4>Frequency</h4>
@@ -185,9 +185,20 @@
                 <div class="info-unit">Hz</div>
             </div>
             <div class="info-card">
-                <h4>Temperature</h4>
+                <h4>Board Temp</h4>
                 <div class="info-value" id="temperature">0.0</div>
                 <div class="info-unit">°C</div>
+            </div>
+            <div class="info-card">
+                <h4>DHT22 Temp (GPIO4)</h4>
+                <div class="info-value" id="ambientTemperature">0.0</div>
+                <div class="info-unit">°C</div>
+            </div>
+            <div class="info-card">
+                <h4>DHT22 Humidity</h4>
+                <div class="info-value" id="ambientHumidity">0.0</div>
+                <div class="info-unit">%</div>
+                <div class="info-unit" id="dhtStatus">--</div>
             </div>
         </section>
 
@@ -237,6 +248,29 @@
                 <div class="system-card">
                     <span class="system-label">IP Address</span>
                     <span class="system-value" id="ipAddress">0.0.0.0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- DHT22 Settings (runtime configurable) -->
+        <section class="system-section settings-section">
+            <h3>DHT22 Settings</h3>
+            <div class="settings-grid">
+                <div class="setting-field checkbox-field">
+                    <label><input type="checkbox" id="dhtCfgEnabled" checked> Enable DHT22 (GPIO4)</label>
+                </div>
+                <div class="setting-field">
+                    <label for="dhtCfgIntervalMs">Read Interval (ms)</label>
+                    <input type="number" id="dhtCfgIntervalMs" min="2000" step="500" value="3000">
+                    <small>Minimum 2000 ms for DHT22 reliability</small>
+                </div>
+                <div class="setting-field checkbox-field">
+                    <label><input type="checkbox" id="dhtCfgDebug"> Enable DHT debug logging</label>
+                </div>
+                <div class="setting-actions">
+                    <button id="dhtSaveBtn" type="button">Save DHT Settings</button>
+                    <button id="dhtReloadBtn" type="button" class="secondary">Reload</button>
+                    <span id="dhtCfgStatus" class="cfg-status">--</span>
                 </div>
             </div>
         </section>

@@ -113,10 +113,12 @@ void SMNetworkManager::startAPMode() {
     Serial.println(F("[NetMgr] Starting Soft-AP..."));
     Logger::getInstance().warn("NetworkManager: Starting SoftAP fallback");
 
+    WiFi.persistent(false);
+    WiFi.setSleep(false);
     WiFi.disconnect(true);
     delay(100);
     WiFi.mode(WIFI_AP);
-    delay(50);
+    delay(100);
 
     applyCustomAPMac();
 
@@ -124,13 +126,34 @@ void SMNetworkManager::startAPMode() {
     apIP.fromString(AP_IP_ADDR);
     apGW.fromString(AP_GATEWAY);
     apSN.fromString(AP_SUBNET);
-    WiFi.softAPConfig(apIP, apGW, apSN);
-    WiFi.softAP(AP_SSID, AP_PASS);
+    bool apCfgOk = WiFi.softAPConfig(apIP, apGW, apSN);
+    if (!apCfgOk) {
+        Logger::getInstance().error("NetworkManager: SoftAP config failed");
+        Serial.println(F("[NetMgr] ERROR: softAPConfig failed"));
+    }
+
+    bool apStartOk = WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
+    if (!apStartOk) {
+        Logger::getInstance().error("NetworkManager: SoftAP start failed");
+        Serial.println(F("[NetMgr] ERROR: softAP start failed"));
+    }
+    delay(150);
 
     _apMode        = true;
     _staMode       = false;
     _wifiConnected = true;
     _currentMac    = WiFi.softAPmacAddress();
+    if (WiFi.softAPIP() == IPAddress((uint32_t)0)) {
+        Logger::getInstance().warn("NetworkManager: SoftAP IP is 0.0.0.0 after start; retrying AP bring-up");
+        Serial.println(F("[NetMgr] WARN: SoftAP IP invalid after start, retrying..."));
+        WiFi.softAPdisconnect(true);
+        delay(100);
+        WiFi.mode(WIFI_AP);
+        delay(100);
+        WiFi.softAPConfig(apIP, apGW, apSN);
+        WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
+        delay(200);
+    }
 
     Serial.println(F("[NetMgr] Failed to connect as client. Starting AP Mode."));
     Serial.print  (F("[NetMgr] AP SSID : ")); Serial.println(F(AP_SSID));
@@ -139,6 +162,7 @@ void SMNetworkManager::startAPMode() {
 
     _dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     Serial.println(F("[NetMgr] Captive portal DNS active (port 53)."));
+    Serial.printf("[NetMgr] AP stations connected: %d\n", WiFi.softAPgetStationNum());
 }   // <-- startAPMode() closing brace  ← THIS WAS MISSING
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -57,8 +57,24 @@ bool EnergyMeter::update() {
     applyFilter(rawData);
 
     if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // Preserve non-ATM90E36 fields that are maintained by other subsystems/tasks (e.g. DHT22).
+        const float prevAmbientTemp = m_snapshot.ambientTemperature;
+        const float prevAmbientHum  = m_snapshot.ambientHumidity;
+        const float prevBoardTemp   = m_snapshot.boardTemperature;
+        const uint32_t prevSeq      = m_snapshot.sequenceNumber;
+
         m_snapshot = rawData;
-        m_snapshot.sequenceNumber++;
+
+        // ATM90E36 driver does not provide ambient humidity and DHT22 temperature. Keep last published values.
+        m_snapshot.ambientTemperature = prevAmbientTemp;
+        m_snapshot.ambientHumidity    = prevAmbientHum;
+
+        // If a transient read returns 0 board temp, keep the previous board temp to avoid UI flicker.
+        if (m_snapshot.boardTemperature == 0.0f && prevBoardTemp != 0.0f) {
+            m_snapshot.boardTemperature = prevBoardTemp;
+        }
+
+        m_snapshot.sequenceNumber = prevSeq + 1;
         m_snapshot.timestamp = millis() / 1000;
         m_snapshot.valid = true;
         xSemaphoreGive(m_mutex);
@@ -119,4 +135,19 @@ void EnergyMeter::applyFilter(MeterData& data) {
     data.phaseA.currentRMS = sumCA / count;
     data.phaseB.currentRMS = sumCB / count;
     data.phaseC.currentRMS = sumCC / count;
+}
+
+
+void EnergyMeter::setAmbientReadings(float ambientTempC, float ambientHumidityPct, bool valid) {
+    if (!m_initialized || m_mutex == nullptr) return;
+
+    if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (valid) {
+            m_snapshot.ambientTemperature = ambientTempC;
+            m_snapshot.ambientHumidity = ambientHumidityPct;
+        }
+        xSemaphoreGive(m_mutex);
+    } else {
+        Logger::getInstance().warn("EnergyMeter: Mutex timeout during setAmbientReadings");
+    }
 }

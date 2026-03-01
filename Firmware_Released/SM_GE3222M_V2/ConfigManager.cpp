@@ -273,6 +273,10 @@ bool ConfigManager::loadSystemConfig(SystemConfig& config) {
     config.logLevel = static_cast<LogLevel>(prefs.getUChar("logLevel", static_cast<uint8_t>(LogLevel::INFO)));
     config.watchdogEnabled = prefs.getBool("wdEnabled", true);
     config.watchdogTimeout = prefs.getUShort("wdTimeout", 30);
+    config.dhtEnabled = prefs.getBool("dhtEnabled", true);
+    config.dhtReadIntervalMs = prefs.getUShort("dhtIntMs", 3000);
+    config.dhtDebugLogging = prefs.getBool("dhtDbg", false);
+    if (config.dhtReadIntervalMs < 2000) config.dhtReadIntervalMs = 2000;
     
     prefs.getString("otaPassword", config.otaPassword, sizeof(config.otaPassword));
     
@@ -295,6 +299,9 @@ bool ConfigManager::saveSystemConfig(const SystemConfig& config) {
     prefs.putUChar("logLevel", static_cast<uint8_t>(config.logLevel));
     prefs.putBool("wdEnabled", config.watchdogEnabled);
     prefs.putUShort("wdTimeout", config.watchdogTimeout);
+    prefs.putBool("dhtEnabled", config.dhtEnabled);
+    prefs.putUShort("dhtIntMs", (config.dhtReadIntervalMs < 2000 ? 2000 : config.dhtReadIntervalMs));
+    prefs.putBool("dhtDbg", config.dhtDebugLogging);
     
     prefs.putString("otaPassword", config.otaPassword);
     

@@ -444,6 +444,88 @@ body {
     color: var(--text-primary);
 }
 
+/* Settings Section */
+.settings-section .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    align-items: end;
+}
+
+.setting-field {
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.setting-field label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.setting-field input[type="number"] {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 0.55rem 0.65rem;
+}
+
+.setting-field small {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.checkbox-field {
+    justify-content: center;
+}
+
+.checkbox-field label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.setting-actions {
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 0.9rem;
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.setting-actions button {
+    background: var(--success-color);
+    color: #062b14;
+    border: none;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.setting-actions button.secondary {
+    background: rgba(255,255,255,0.12);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.cfg-status {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.cfg-status.error {
+    color: var(--danger-color);
+}
+
 /* Footer */
 .footer {
     text-align: center;

@@ -40,6 +40,9 @@ public:
     TaskHandle_t getMQTTTaskHandle() const { return _mqttTask; }
     bool isTCPServerTaskRunning() const { return _tcpServerTask != nullptr; }
     TaskHandle_t getDiagnosticsTaskHandle() const { return _diagnosticsTask; }
+    TaskHandle_t getDHTTaskHandle() const { return _dhtTask; }
+    TaskHandle_t getWebUITaskHandle() const { return _webUiTask; }
+    bool isWebUITaskRunning() const { return _webUiTask != nullptr; }
     
 private:
     TaskManager();
@@ -53,6 +56,8 @@ private:
     static void tcpServerTaskFunc(void* param);
     static void mqttTaskFunc(void* param);
     static void diagnosticsTaskFunc(void* param);
+    static void dhtTaskFunc(void* param);
+    static void webUiTaskFunc(void* param);
     
     TaskHandle_t _energyTask;
     TaskHandle_t _accumulatorTask;
@@ -60,9 +65,13 @@ private:
     TaskHandle_t _tcpServerTask;
     TaskHandle_t _mqttTask;
     TaskHandle_t _diagnosticsTask;
+    TaskHandle_t _dhtTask;
+    TaskHandle_t _webUiTask;
     
     bool _tasksRunning;
-    // Web interface/task removed in this build.
+    // NOTE: Synchronous WebServer can block during SPIFFS file streaming; running it in a dedicated Core0 task
+    // can starve IDLE0 and trip TWDT in AP mode. Keep disabled by default and service in Arduino loop().
+    static constexpr bool ENABLE_WEBUI_TASK = false;
 
     
     // Stack sizes (bytes)
@@ -72,6 +81,8 @@ private:
     static constexpr uint32_t TCP_SERVER_STACK_SIZE = 4096;
     static constexpr uint32_t MQTT_STACK_SIZE = 4096;
     static constexpr uint32_t DIAGNOSTICS_STACK_SIZE = 3072;
+    static constexpr uint32_t DHT_STACK_SIZE = 3072;
+    static constexpr uint32_t WEBUI_STACK_SIZE = 4096;
     
     // Task priorities (higher = more important)
     static constexpr UBaseType_t ENERGY_PRIORITY = 5;
@@ -80,6 +91,8 @@ private:
     static constexpr UBaseType_t TCP_SERVER_PRIORITY = 2;
     static constexpr UBaseType_t MQTT_PRIORITY = 2;
     static constexpr UBaseType_t DIAGNOSTICS_PRIORITY = 1;
+    static constexpr UBaseType_t DHT_PRIORITY = 1;
+    static constexpr UBaseType_t WEBUI_PRIORITY = 2;
     
     // Core affinity (ESP32 dual-core)
     static constexpr BaseType_t CORE_0 = 0;  // Communications

@@ -49,6 +49,12 @@ public:
      */
     MeterData getSnapshot();
 
+    /**
+     * Update ambient sensor values (e.g., DHT22) in the shared meter snapshot.
+     * Thread-safe; does not touch ATM90E36.
+     */
+    void setAmbientReadings(float ambientTempC, float ambientHumidityPct, bool valid = true);
+
 private:
     // Singleton - prevent copying
     EnergyMeter();

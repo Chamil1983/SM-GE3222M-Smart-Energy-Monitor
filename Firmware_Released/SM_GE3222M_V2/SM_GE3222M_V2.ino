@@ -37,6 +37,7 @@
 #include "SPIBus.h"
 #include "I2CBus.h"
 #include "GPIOManager.h"
+#include "LCDUI20x4.h"
 
 // Energy modules
 #include "ATM90E36Driver.h"
@@ -48,6 +49,7 @@
 #include "ConfigManager.h"
 #include "SPIFFSManager.h"
 #include "DataLogger.h"
+#include "DHTSensorManager.h"
 
 // Network modules
 #include "SMNetworkManager.h"
@@ -175,7 +177,6 @@ bool initPhase1_HAL() {
         }
     }
     checkBootStep("I2C Bus Init", true);
-    
     // Initialize System Monitor
     SystemMonitor::getInstance().init();
     checkBootStep("System Monitor Init", true);
@@ -233,7 +234,12 @@ bool initPhase2_Storage() {
 
     checkBootStep("Modbus Config Loaded", true);
     checkBootStep("System Config Loaded", true);
-// Initialize Data Logger
+
+    // Initialize DHT22 after NVS/Config is ready (reads SystemConfig defaults/settings)
+    bool dhtInitOk = DHTSensorManager::getInstance().init();
+    printBootOptionalStep("DHT22 Sensor Init (GPIO4)", dhtInitOk);
+
+    // Initialize Data Logger
     // Initialize Data Logger with a safe default (avoid heap exhaustion when PSRAM is not present)
     size_t logEntries = psramFound() ? 400 : 200;
     bool dlOk = DataLogger::getInstance().init((uint16_t)logEntries);
@@ -314,6 +320,10 @@ Serial.printf("    Totals: P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f F=%.2fHz\n",
         Serial.println("  WARNING: Initial meter read failed");
     }
     
+    // Perform initial DHT22 read (optional) so ambient values appear early on dashboard/MQTT.
+    bool dhtReadOk = DHTSensorManager::getInstance().forceRead();
+    printBootOptionalStep("Initial DHT22 Read", dhtReadOk);
+
     return true;
 }
 
@@ -375,15 +385,21 @@ bool initPhase5_Communications() {
     }
 
     // TCP JSON server (WiFi only)
-    // Default to port 8080 unless config says otherwise
+    // In AP setup mode, keep TCP server off to free sockets/CPU for HTTP + captive portal stability.
+    bool tcpOk = false;
     uint16_t tcpPort = 8080;
     if (modbusConfig.tcpPort > 0) tcpPort = modbusConfig.tcpPort; // reuse field if provided
-    bool tcpOk = TCPDataServer::getInstance().begin(tcpPort);
-    if (tcpOk) {
-        checkBootStep("TCP JSON Server (port configured)", true);
-        Serial.printf("  TCP Port: %u\n", (unsigned)tcpPort);
+    if (networkManager.isAPMode()) {
+        printBootOptionalStep("TCP JSON Server (skipped in AP setup mode)", false);
+        Serial.println("   NOTE: TCP server disabled in AP mode to free WiFi resources.");
     } else {
-        printBootOptionalStep("TCP JSON Server (disabled / failed)", false);
+        tcpOk = TCPDataServer::getInstance().begin(tcpPort);
+        if (tcpOk) {
+            checkBootStep("TCP JSON Server (port configured)", true);
+            Serial.printf("  TCP Port: %u\n", (unsigned)tcpPort);
+        } else {
+            printBootOptionalStep("TCP JSON Server (disabled / failed)", false);
+        }
     }
 
     // Update status with TCP flag
@@ -408,6 +424,8 @@ bool initPhase6_Tasks() {
     checkBootStep("ModbusTask (Core 1, Priority 3, 10ms poll)", true);
     printBootOptionalStep("TCPServerTask (Core 0, Priority 2, 20ms poll)", TaskManager::getInstance().isTCPServerTaskRunning());
     printBootOptionalStep("MQTTTask (stub)", TaskManager::getInstance().getMQTTTaskHandle() != nullptr);
+    printBootOptionalStep("DHTTask (Core 0, Priority 1, 500ms scheduler)", TaskManager::getInstance().getDHTTaskHandle() != nullptr);
+    printBootOptionalStep("WebUITask (Core 0, Priority 2, 10ms poll)", TaskManager::getInstance().isWebUITaskRunning());
     printBootOptionalStep("DiagnosticsTask (Core 0, Priority 1, 5000ms)", TaskManager::getInstance().getDiagnosticsTaskHandle() != nullptr);
 
     return true;
@@ -468,6 +486,10 @@ void setup() {
     GPIOManager::getInstance().setLED(LED::RUN, true);
     GPIOManager::getInstance().setLED(LED::FAULT, false);
     digitalWrite(LED_BUILTIN, LOW);
+
+    // Initialize LCD UI (non-fatal, does not modify Web UI path/files)
+    bool lcdOk = LCDUI20x4::getInstance().begin(0x27);
+    printBootOptionalStep("LCD UI 20x4 (I2C 0x27)", lcdOk);
     
     g_bootComplete = true;
 }
@@ -476,10 +498,17 @@ void setup() {
 // LOOP - Minimal main loop (tasks handle most work)
 // ============================================================================
 void loop() {
-    // Keep captive portal DNS responsive and monitor WiFi.
-    networkManager.loop();
-    WebUIManager::getInstance().loop();
-    // FreeRTOS tasks handle all runtime processing.
-    // Keep the Arduino loop idle to minimize jitter and watchdog interactions.
-    delay(50);
+    // Safety interlock: if WebUITask exists, service DNS/WebUI there only (single context).
+    // Default path keeps synchronous HTTP/DNS in Arduino loop to avoid Core0 IDLE starvation in AP mode.
+    if (!TaskManager::getInstance().isWebUITaskRunning()) {
+        networkManager.loop();
+        WebUIManager::getInstance().loop();
+    }
+
+    // LCD UI runs in loop() (same context as synchronous WebUI) to keep web serving behavior unchanged.
+    LCDUI20x4::getInstance().loop();
+
+    // Faster polling in AP setup mode improves captive-portal responsiveness.
+    delay(networkManager.isAPMode() ? 2 : 10);
 }
+

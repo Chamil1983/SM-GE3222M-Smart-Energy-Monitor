@@ -6,6 +6,7 @@
 #include "SMNetworkManager.h"
 #include "CalibrationManager.h"
 #include "DataLogger.h"
+#include "DHTSensorManager.h"
 
 ProtocolV2::ProtocolV2() {
 }
@@ -341,6 +342,9 @@ void ProtocolV2::configToJson(JsonDocument& doc) {
         sys["logLevel"] = static_cast<uint8_t>(sysCfg.logLevel);
         sys["watchdogEnabled"] = sysCfg.watchdogEnabled;
         sys["watchdogTimeout"] = sysCfg.watchdogTimeout;
+        sys["dhtEnabled"] = sysCfg.dhtEnabled;
+        sys["dhtReadIntervalMs"] = sysCfg.dhtReadIntervalMs;
+        sys["dhtDebugLogging"] = sysCfg.dhtDebugLogging;
     }
     // WiFi (SMNetworkManager)
     {
@@ -389,14 +393,25 @@ bool ProtocolV2::jsonToConfig(const JsonDocument& doc) {
         SystemConfig sysCfg;
         if (cfg.getSystemConfig(sysCfg)) {
             JsonObjectConst sys = doc["system"].as<JsonObjectConst>();
+            const bool dhtFieldsTouched = sys.containsKey("dhtEnabled") || sys.containsKey("dhtReadIntervalMs") || sys.containsKey("dhtDebugLogging");
+
             if (sys.containsKey("readInterval")) sysCfg.readInterval = sys["readInterval"];
             if (sys.containsKey("publishInterval")) sysCfg.publishInterval = sys["publishInterval"];
             if (sys.containsKey("webServerEnabled")) sysCfg.webServerEnabled = sys["webServerEnabled"];
             if (sys.containsKey("webServerPort")) sysCfg.webServerPort = sys["webServerPort"];
             if (sys.containsKey("otaEnabled")) sysCfg.otaEnabled = sys["otaEnabled"];
             if (sys.containsKey("watchdogEnabled")) sysCfg.watchdogEnabled = sys["watchdogEnabled"];
-            
-            success &= cfg.setSystemConfig(sysCfg);
+            if (sys.containsKey("dhtEnabled")) sysCfg.dhtEnabled = sys["dhtEnabled"];
+            if (sys.containsKey("dhtReadIntervalMs")) sysCfg.dhtReadIntervalMs = sys["dhtReadIntervalMs"];
+            if (sys.containsKey("dhtDebugLogging")) sysCfg.dhtDebugLogging = sys["dhtDebugLogging"];
+            if (sysCfg.dhtReadIntervalMs < 2000) sysCfg.dhtReadIntervalMs = 2000;
+
+            bool sysSaved = cfg.setSystemConfig(sysCfg);
+            success &= sysSaved;
+            if (sysSaved && dhtFieldsTouched) {
+                // Apply DHT settings immediately (no reboot required for enable/interval/debug changes).
+                DHTSensorManager::getInstance().reloadConfig(true);
+            }
         }
     }
     

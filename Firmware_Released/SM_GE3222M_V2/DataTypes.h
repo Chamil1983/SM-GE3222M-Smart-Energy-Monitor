@@ -306,7 +306,12 @@ struct SystemConfig {
     LogLevel logLevel;
     bool     watchdogEnabled;
     uint16_t watchdogTimeout;   // Watchdog timeout (seconds)
-    
+
+    // DHT22 Ambient Sensor (GPIO4)
+    bool     dhtEnabled;
+    uint16_t dhtReadIntervalMs; // Minimum 2000ms recommended for DHT22
+    bool     dhtDebugLogging;
+
     SystemConfig() {
         readInterval = 500;
         publishInterval = 1;
@@ -317,6 +322,9 @@ struct SystemConfig {
         logLevel = LogLevel::INFO;
         watchdogEnabled = true;
         watchdogTimeout = 30;
+        dhtEnabled = true;
+        dhtReadIntervalMs = 3000;
+        dhtDebugLogging = false;
     }
 };
 

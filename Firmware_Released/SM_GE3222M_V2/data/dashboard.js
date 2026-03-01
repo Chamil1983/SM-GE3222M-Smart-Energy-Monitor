@@ -1,6 +1,8 @@
 // WebSocket connection
 let ws = null;
 let pollTimer = null;
+let dhtSettingsLoaded = false;
+let lastGoodDht = { t: null, h: null };
 
 function startPolling() {
     if (pollTimer) return;
@@ -29,8 +31,10 @@ const maxReconnectDelay = 30000;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    bindDhtSettingsForm();
     initWebSocket();
     fetchInitialData();
+    loadDhtSettings();
 });
 
 // Initialize WebSocket connection
@@ -160,9 +164,11 @@ function updateDashboard(data) {
     updateElement('pfC', data.PFmeanC, 2);
     updateElement('pfTotal', data.PFmeanT, 2);
     
-    // System info
+    // System info + DHT22 ambient
     updateElement('frequency', data.Freq, 2);
-    updateElement('temperature', data.Temp, 1);
+    updateElement('temperature', (data.BoardTemp !== undefined ? data.BoardTemp : data.Temp), 1);
+    updateAmbientDhtCards(data);
+    updateDhtStatus(data);
     
     // Energy counters
     updateElement('importEnergy', data.APenergyT, 3);
@@ -193,6 +199,130 @@ function updateElement(id, value, decimals) {
         if (!isNaN(numValue)) {
             element.textContent = numValue.toFixed(decimals);
         }
+    }
+}
+
+
+function updateAmbientDhtCards(data) {
+    const dhtOk = !!data.DHTok;
+    const ambT = (data.AmbTemp !== undefined ? Number(data.AmbTemp) : NaN);
+    const ambH = (data.Humidity !== undefined ? Number(data.Humidity) : NaN);
+
+    if (dhtOk && Number.isFinite(ambT) && Number.isFinite(ambH)) {
+        lastGoodDht.t = ambT;
+        lastGoodDht.h = ambH;
+    }
+
+    const tempToShow = (dhtOk && Number.isFinite(ambT))
+        ? ambT
+        : (lastGoodDht.t !== null ? lastGoodDht.t : ambT);
+    const humToShow = (dhtOk && Number.isFinite(ambH))
+        ? ambH
+        : (lastGoodDht.h !== null ? lastGoodDht.h : ambH);
+
+    updateElement('ambientTemperature', tempToShow, 1);
+    updateElement('ambientHumidity', humToShow, 1);
+}
+
+function bindDhtSettingsForm() {
+    const btnSave = document.getElementById('dhtSaveBtn');
+    const btnReload = document.getElementById('dhtReloadBtn');
+    if (btnSave) btnSave.addEventListener('click', saveDhtSettings);
+    if (btnReload) btnReload.addEventListener('click', loadDhtSettings);
+}
+
+function setDhtCfgStatus(msg, isError = false) {
+    const el = document.getElementById('dhtCfgStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = isError ? 'cfg-status error' : 'cfg-status';
+}
+
+function loadDhtSettings() {
+    fetch('/api/config')
+        .then(r => r.json())
+        .then(cfg => {
+            const sys = (cfg && cfg.system) ? cfg.system : {};
+            const en = document.getElementById('dhtCfgEnabled');
+            const iv = document.getElementById('dhtCfgIntervalMs');
+            const dbg = document.getElementById('dhtCfgDebug');
+            if (en) en.checked = !!sys.dhtEnabled;
+            if (iv && sys.dhtReadIntervalMs !== undefined) iv.value = Number(sys.dhtReadIntervalMs) || 3000;
+            if (dbg) dbg.checked = !!sys.dhtDebugLogging;
+            dhtSettingsLoaded = true;
+            setDhtCfgStatus('DHT settings loaded');
+        })
+        .catch(err => {
+            console.error('Failed to load DHT settings', err);
+            setDhtCfgStatus('Failed to load settings', true);
+        });
+}
+
+function saveDhtSettings() {
+    const en = document.getElementById('dhtCfgEnabled');
+    const iv = document.getElementById('dhtCfgIntervalMs');
+    const dbg = document.getElementById('dhtCfgDebug');
+    if (!en || !iv || !dbg) return;
+
+    let intervalMs = Number(iv.value || 3000);
+    if (!Number.isFinite(intervalMs)) intervalMs = 3000;
+    intervalMs = Math.max(2000, Math.round(intervalMs));
+    iv.value = intervalMs;
+
+    const payload = {
+        system: {
+            dhtEnabled: !!en.checked,
+            dhtReadIntervalMs: intervalMs,
+            dhtDebugLogging: !!dbg.checked
+        }
+    };
+
+    setDhtCfgStatus('Saving...');
+    fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(async r => ({ ok: r.ok, text: await r.text() }))
+    .then(({ ok, text }) => {
+        let msg = ok ? 'Saved & applied (runtime)' : 'Save failed';
+        try {
+            const j = JSON.parse(text || '{}');
+            if (j && j.message) msg = j.message;
+            if (ok && j && j.status === 'ok') msg = 'DHT settings saved & applied';
+        } catch (_) {}
+        setDhtCfgStatus(msg, !ok);
+        if (ok) {
+            loadDhtSettings();
+            fetchInitialData();
+        }
+    })
+    .catch(err => {
+        console.error('Failed to save DHT settings', err);
+        setDhtCfgStatus('Save failed (network)', true);
+    });
+}
+
+// Update DHT22 status badge/text
+function updateDhtStatus(data) {
+    const el = document.getElementById('dhtStatus');
+    if (!el) return;
+
+    const enabled = !!data.DHTen;
+    const ok = !!data.DHTok;
+    const age = (data.DHTageMs !== undefined && data.DHTageMs !== null) ? Number(data.DHTageMs) : 0;
+    const fails = (data.DHTfails !== undefined && data.DHTfails !== null) ? Number(data.DHTfails) : 0;
+
+    if (!enabled) {
+        el.textContent = 'DHT disabled';
+        return;
+    }
+
+    if (ok) {
+        const ageSec = Math.max(0, Math.round(age / 1000));
+        el.textContent = `DHT OK · ${ageSec}s ago`;
+    } else {
+        el.textContent = `DHT waiting/fail · count ${fails}`;
     }
 }
 

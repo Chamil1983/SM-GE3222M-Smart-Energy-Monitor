@@ -8,6 +8,9 @@
 #include "EnergyAccumulator.h"
 #include "ModbusServer.h"
 #include "TCPDataServer.h"
+#include "WebUIManager.h"
+#include "DHTSensorManager.h"
+#include "SMNetworkManager.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_task_wdt.h>
@@ -15,6 +18,7 @@
 #include "ConfigManager.h"
 #include "EventBus.h"
 #include "WatchdogManager.h"
+#include "DataLogger.h"
 
 TaskManager& TaskManager::getInstance() {
     static TaskManager instance;
@@ -28,6 +32,8 @@ TaskManager::TaskManager()
     , _tcpServerTask(nullptr)
     , _mqttTask(nullptr)
     , _diagnosticsTask(nullptr)
+    , _dhtTask(nullptr)
+    , _webUiTask(nullptr)
     , _tasksRunning(false) {
 }
 
@@ -94,22 +100,53 @@ bool TaskManager::createAllTasks() {
     }
     Logger::getInstance().info("TaskManager: Created ModbusTask on Core 1");
 
-    // Create TCP Server Task (Core 0, Priority 2)
-    result = xTaskCreatePinnedToCore(
-        tcpServerTaskFunc,
-        "TCPServerTask",
-        TCP_SERVER_STACK_SIZE,
-        nullptr,
-        TCP_SERVER_PRIORITY,
-        &_tcpServerTask,
-        CORE_0
-    );
-
-    if (result != pdPASS) {
+    // Create TCP Server Task (Core 0, Priority 2) - OPTIONAL
+    // In AP setup mode, keep this task disabled (server.begin is skipped and we want Core0 headroom for WiFi/DNS).
+    if (networkManager.isAPMode()) {
         _tcpServerTask = nullptr;
-        Logger::getInstance().warn("TaskManager: Failed to create TCPServerTask (optional) - TCP server task disabled");
+        Logger::getInstance().info("TaskManager: TCPServerTask skipped in AP mode");
     } else {
-        Logger::getInstance().info("TaskManager: Created TCPServerTask on Core 0");
+        result = xTaskCreatePinnedToCore(
+            tcpServerTaskFunc,
+            "TCPServerTask",
+            TCP_SERVER_STACK_SIZE,
+            nullptr,
+            TCP_SERVER_PRIORITY,
+            &_tcpServerTask,
+            CORE_0
+        );
+
+        if (result != pdPASS) {
+            _tcpServerTask = nullptr;
+            Logger::getInstance().warn("TaskManager: Failed to create TCPServerTask (optional) - TCP server task disabled");
+        } else {
+            Logger::getInstance().info("TaskManager: Created TCPServerTask on Core 0");
+        }
+    }
+
+    // Create Web UI / DNS Service Task (Core 0, Priority 2) - OPTIONAL
+    // Disabled by default for synchronous WebServer builds; streamFile() can block long enough to starve IDLE0 and
+    // trigger task WDT in AP mode. Arduino loop() fallback remains active and is safer here.
+    if (ENABLE_WEBUI_TASK) {
+        result = xTaskCreatePinnedToCore(
+            webUiTaskFunc,
+            "WebUITask",
+            WEBUI_STACK_SIZE,
+            nullptr,
+            WEBUI_PRIORITY,
+            &_webUiTask,
+            CORE_0
+        );
+
+        if (result != pdPASS) {
+            _webUiTask = nullptr;
+            Logger::getInstance().warn("TaskManager: Failed to create WebUITask (optional) - web UI will be serviced in loop()");
+        } else {
+            Logger::getInstance().info("TaskManager: Created WebUITask on Core 0");
+        }
+    } else {
+        _webUiTask = nullptr;
+        Logger::getInstance().warn("TaskManager: WebUITask disabled (synchronous HTTP serviced in loop for AP stability)");
     }
 
     // Create Diagnostics Task (Core 0, Priority 1) - OPTIONAL
@@ -129,6 +166,25 @@ bool TaskManager::createAllTasks() {
     } else {
         Logger::getInstance().info("TaskManager: Created DiagnosticsTask on Core 0");
     }
+
+    // Create DHT Sensor Task (Core 0, Priority 1) - OPTIONAL
+    result = xTaskCreatePinnedToCore(
+        dhtTaskFunc,
+        "DHTTask",
+        DHT_STACK_SIZE,
+        nullptr,
+        DHT_PRIORITY,
+        &_dhtTask,
+        CORE_0
+    );
+
+    if (result != pdPASS) {
+        _dhtTask = nullptr;
+        Logger::getInstance().warn("TaskManager: Failed to create DHTTask (optional) - DHT polling task disabled");
+    } else {
+        Logger::getInstance().info("TaskManager: Created DHTTask on Core 0");
+    }
+
     
     _tasksRunning = true;
     Logger::getInstance().info("TaskManager: All tasks created successfully");
@@ -145,6 +201,16 @@ void TaskManager::stopAllTasks() {
     if (_diagnosticsTask) {
         vTaskDelete(_diagnosticsTask);
         _diagnosticsTask = nullptr;
+    }
+
+    if (_dhtTask) {
+        vTaskDelete(_dhtTask);
+        _dhtTask = nullptr;
+    }
+
+    if (_webUiTask) {
+        vTaskDelete(_webUiTask);
+        _webUiTask = nullptr;
     }
 
     if (_mqttTask) {
@@ -191,6 +257,7 @@ void TaskManager::energyTaskFunc(void* param) {
     while (true) {
         if (meter.update()) {
             MeterData data = meter.getSnapshot();
+            DataLogger::getInstance().logReading(data);
             eventBus.publish(EventType::METER_DATA_UPDATED, &data, sizeof(data));
         }
         vTaskDelayUntil(&lastWakeTime, interval);
@@ -262,6 +329,37 @@ void TaskManager::tcpServerTaskFunc(void* param) {
     }
 }
 
+void TaskManager::webUiTaskFunc(void* param) {
+    Logger::getInstance().info("WebUITask: Started (10ms poll)");
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    const TickType_t interval = pdMS_TO_TICKS(10);
+
+    while (true) {
+        // Service DNS captive portal + synchronous HTTP server from a single context (Core 0).
+        networkManager.loop();
+        WebUIManager::getInstance().loop();
+#if defined(ARDUINO_ARCH_ESP32)
+        // If ever enabled, reset TWDT for this task and yield once more to let IDLE0 run.
+        esp_task_wdt_reset();
+#endif
+        taskYIELD();
+        vTaskDelayUntil(&lastWakeTime, interval);
+    }
+}
+
+void TaskManager::dhtTaskFunc(void* param) {
+    Logger::getInstance().info("DHTTask: Started (500ms scheduler, GPIO4 DHT22)");
+    DHTSensorManager& dht = DHTSensorManager::getInstance();
+
+    TickType_t lastWakeTime = xTaskGetTickCount();
+    const TickType_t interval = pdMS_TO_TICKS(500);
+
+    while (true) {
+        dht.poll();
+        vTaskDelayUntil(&lastWakeTime, interval);
+    }
+}
+
 void TaskManager::mqttTaskFunc(void* param) {
     // Placeholder to keep API compatibility; MQTT can be added/enabled later.
     Logger::getInstance().info("MQTTTask: Started (disabled stub)");
@@ -284,6 +382,14 @@ void TaskManager::diagnosticsTaskFunc(void* param) {
         if (nowMs - lastLogMs > 60000) {
             lastLogMs = nowMs;
             Logger::getInstance().info("Heap: %u bytes free (min: %u)", freeHeap, minFreeHeap);
+            auto dht = DHTSensorManager::getInstance().getSnapshot();
+            Logger::getInstance().info("DHT22 status: en=%s valid=%s T=%.1fC RH=%.1f%% ok=%lu fail=%lu age=%lums",
+                                       dht.enabled ? "Y" : "N",
+                                       dht.valid ? "Y" : "N",
+                                       dht.temperatureC, dht.humidityPct,
+                                       (unsigned long)dht.successCount,
+                                       (unsigned long)dht.failCount,
+                                       (unsigned long)(dht.lastGoodReadMs ? (millis() - dht.lastGoodReadMs) : 0));
         }
         
         if (freeHeap < 10000) {
