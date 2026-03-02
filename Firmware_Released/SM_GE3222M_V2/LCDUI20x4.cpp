@@ -38,6 +38,12 @@ auto lcdInitCompat(TLcd& lcd, LcdInitPriority<0>) -> decltype(lcd.begin(20, 4), 
 
 } // namespace
 
+#if defined(ARDUINO_ARCH_ESP32)
+// LCD UI background task intentionally disabled to keep Web/DNS servicing in a single,
+// pre-existing context (Arduino loop). This avoids AP instability/races on sync WebServer.
+static TaskHandle_t s_lcdUiTaskHandle = nullptr;
+#endif
+
 // Opaque implementation holder (keeps LiquidCrystal_I2C type out of header)
 class LCDUI20x4::Impl {
 public:
@@ -52,6 +58,8 @@ static constexpr uint32_t LCD_SETTINGS_TIMEOUT_MS  = 60000;
 static constexpr uint32_t LCD_CONFIRM_TIMEOUT_MS   = 15000;
 static constexpr uint32_t LCD_PHASE_ROTATE_MS      = 2000;
 static constexpr uint32_t LCD_DEMAND_SAMPLE_MS     = 5000;
+static constexpr uint32_t LCD_LOOP_SLICE_MS        = 20;
+static constexpr uint32_t LCD_METRICS_UPDATE_MS    = 200;
 
 LCDUI20x4& LCDUI20x4::getInstance() {
     static LCDUI20x4 instance;
@@ -68,6 +76,8 @@ LCDUI20x4::LCDUI20x4()
     , _lastUserInputMs(0)
     , _lastRenderMs(0)
     , _lastPhaseRotateMs(0)
+    , _lastLoopSliceMs(0)
+    , _lastMetricsUpdateMs(0)
     , _comboLatched(false)
     , _comboStartMs(0)
     , _powerView(PowerView::KW)
@@ -143,7 +153,8 @@ bool LCDUI20x4::begin(uint8_t i2cAddr) {
     writeLine(1, String("FW:") + FW_VERSION, true);
     writeLine(2, "LCD UI 20x4 Ready", true);
     writeLine(3, "WEB UI SAFE MODE", true);
-    delay(600);
+    delay(20);
+    yield();
 
     _state = UiState::RUN;
     _page = RunPage::LIVE_SUMMARY;
@@ -154,6 +165,9 @@ bool LCDUI20x4::begin(uint8_t i2cAddr) {
     _initialized = true;
     Logger::getInstance().info("LCDUI: Initialized (20x4 I2C @0x%02X, MODE=GPIO%d, SET=GPIO%d)",
                                _lcdAddr, PIN_BUTTON_MODE, PIN_BUTTON_SET);
+#if defined(ARDUINO_ARCH_ESP32)
+    (void)s_lcdUiTaskHandle; // background task disabled by design
+#endif
 
     maybeRender(true);
     return true;
@@ -161,6 +175,12 @@ bool LCDUI20x4::begin(uint8_t i2cAddr) {
 
 void LCDUI20x4::loop() {
     if (!_initialized || !_lcdPresent || _impl == nullptr) return;
+
+    const uint32_t now = millis();
+    if (_lastLoopSliceMs != 0 && (uint32_t)(now - _lastLoopSliceMs) < LCD_LOOP_SLICE_MS) {
+        return;
+    }
+    _lastLoopSliceMs = now;
 
     ButtonEvents ev;
     pollButtons(ev);
@@ -177,8 +197,12 @@ void LCDUI20x4::loop() {
         showToast("Cancelled", 900);
     }
 
-    updateDerivedMetrics();
+    if (_lastMetricsUpdateMs == 0 || (uint32_t)(now - _lastMetricsUpdateMs) >= LCD_METRICS_UPDATE_MS) {
+        _lastMetricsUpdateMs = now;
+        updateDerivedMetrics();
+    }
     maybeRender(false);
+    yield();
 }
 
 void LCDUI20x4::pollButtons(ButtonEvents& ev) {
@@ -348,7 +372,7 @@ void LCDUI20x4::maybeRender(bool force) {
             default: intervalMs = 1000; break;
         }
     } else {
-        intervalMs = 80; // event-driven feel, still capped
+        intervalMs = 120; // event-driven feel, still capped
     }
 
     bool timed = (now - _lastRenderMs) >= intervalMs;
@@ -454,6 +478,7 @@ void LCDUI20x4::writeLine(uint8_t row, const String& text, bool force) {
     _rowCache[row] = out;
     _impl->lcd.setCursor(0, row);
     _impl->lcd.print(out);
+    yield();
 }
 
 String LCDUI20x4::fit20(const String& s) const {

@@ -125,9 +125,10 @@ bool TaskManager::createAllTasks() {
     }
 
     // Create Web UI / DNS Service Task (Core 0, Priority 2) - OPTIONAL
-    // Disabled by default for synchronous WebServer builds; streamFile() can block long enough to starve IDLE0 and
-    // trigger task WDT in AP mode. Arduino loop() fallback remains active and is safer here.
-    if (ENABLE_WEBUI_TASK) {
+    // In AP setup mode with synchronous WebServer fallback, a dedicated pump task improves DNS/HTTP responsiveness
+    // and avoids dependence on Arduino loop timing (LCD updates, etc.). Root page in AP mode is small (not SPIFFS-heavy).
+    const bool enableWebUiTaskNow = ENABLE_WEBUI_TASK;
+    if (enableWebUiTaskNow) {
         result = xTaskCreatePinnedToCore(
             webUiTaskFunc,
             "WebUITask",
@@ -146,7 +147,7 @@ bool TaskManager::createAllTasks() {
         }
     } else {
         _webUiTask = nullptr;
-        Logger::getInstance().warn("TaskManager: WebUITask disabled (synchronous HTTP serviced in loop for AP stability)");
+        Logger::getInstance().warn("TaskManager: WebUITask disabled (HTTP/DNS serviced in loop fallback)");
     }
 
     // Create Diagnostics Task (Core 0, Priority 1) - OPTIONAL
@@ -338,10 +339,9 @@ void TaskManager::webUiTaskFunc(void* param) {
         // Service DNS captive portal + synchronous HTTP server from a single context (Core 0).
         networkManager.loop();
         WebUIManager::getInstance().loop();
-#if defined(ARDUINO_ARCH_ESP32)
-        // If ever enabled, reset TWDT for this task and yield once more to let IDLE0 run.
-        esp_task_wdt_reset();
-#endif
+        // TWDT feed disabled here: some ESP32 core 3.x builds produce task_wdt "task not found" storms
+        // in this optional task path, which can starve WiFi/AP servicing.
+        // WatchdogManager::getInstance().feed();
         taskYIELD();
         vTaskDelayUntil(&lastWakeTime, interval);
     }

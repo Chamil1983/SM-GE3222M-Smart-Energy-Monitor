@@ -498,17 +498,14 @@ void setup() {
 // LOOP - Minimal main loop (tasks handle most work)
 // ============================================================================
 void loop() {
-    // Safety interlock: if WebUITask exists, service DNS/WebUI there only (single context).
-    // Default path keeps synchronous HTTP/DNS in Arduino loop to avoid Core0 IDLE starvation in AP mode.
-    if (!TaskManager::getInstance().isWebUITaskRunning()) {
-        networkManager.loop();
-        WebUIManager::getInstance().loop();
-    }
+    // Keep Web/DNS servicing in a single context (Arduino loop) for stable AP mode.
+    networkManager.loop();
+    WebUIManager::getInstance().loop();
 
-    // LCD UI runs in loop() (same context as synchronous WebUI) to keep web serving behavior unchanged.
+    // Run LCD UI cooperatively (internally throttled + anti-flicker) so it doesn't block web serving.
     LCDUI20x4::getInstance().loop();
+    yield();
 
     // Faster polling in AP setup mode improves captive-portal responsiveness.
-    delay(networkManager.isAPMode() ? 2 : 10);
+    delay(networkManager.isAPMode() ? 1 : 5);
 }
-

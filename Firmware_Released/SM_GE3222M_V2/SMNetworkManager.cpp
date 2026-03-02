@@ -8,7 +8,9 @@ SMNetworkManager::SMNetworkManager()
     : _apMode(false),
       _staMode(false),
       _wifiConnected(false),
-      _currentMac("") {
+      _currentMac(""),
+      _lastApDiagMs(0),
+      _lastApStaCount(-1) {
 
     _cfg.ssid    = DEF_STA_SSID;
     _cfg.pass    = DEF_STA_PASS;
@@ -39,6 +41,21 @@ void SMNetworkManager::begin() {
 void SMNetworkManager::loop() {
     if (_apMode) {
         _dnsServer.processNextRequest();
+
+        // Lightweight AP diagnostics (helps verify real station attachment / DHCP path).
+        const uint32_t now = millis();
+        int staCount = WiFi.softAPgetStationNum();
+        if (staCount != _lastApStaCount) {
+            _lastApStaCount = staCount;
+            Serial.printf("[NetMgr] AP stations connected: %d\n", staCount);
+            Logger::getInstance().info("NetworkManager: AP stations=%d", staCount);
+        }
+        if (_lastApDiagMs == 0 || (uint32_t)(now - _lastApDiagMs) >= 10000UL) {
+            _lastApDiagMs = now;
+            IPAddress ip = WiFi.softAPIP();
+            Logger::getInstance().info("NetworkManager: AP alive SSID=%s IP=%s CH=%u STA=%d",
+                                       AP_SSID, ip.toString().c_str(), (unsigned)WiFi.channel(), staCount);
+        }
     }
 }   // <-- loop() closing brace
 
@@ -58,6 +75,7 @@ bool SMNetworkManager::parseMac(const char* macStr, uint8_t* macBytes) {
 //  applyCustomAPMac()
 // ─────────────────────────────────────────────────────────────────────────────
 void SMNetworkManager::applyCustomAPMac() {
+#if AP_USE_CUSTOM_MAC
     uint8_t macBytes[6];
     const char* src = WIFI_AP_MAC;
     if (!parseMac(src, macBytes)) {
@@ -74,12 +92,16 @@ void SMNetworkManager::applyCustomAPMac() {
         Serial.printf("[MAC] AP MAC failed (netif=%d, wifi=%d)\n",
                       (int)e1, (int)e2);
     }
+#else
+    // Disabled by default for AP stability (DHCP/ARP reliability on some ESP32 core builds)
+#endif // AP_USE_CUSTOM_MAC
 }   // <-- applyCustomAPMac() closing brace
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  applyCustomSTAMac()
 // ─────────────────────────────────────────────────────────────────────────────
 void SMNetworkManager::applyCustomSTAMac() {
+#if AP_USE_CUSTOM_MAC
     uint8_t macBytes[6];
     const char* src = WIFI_STA_MAC;
     if (!parseMac(src, macBytes)) {
@@ -96,6 +118,9 @@ void SMNetworkManager::applyCustomSTAMac() {
         Serial.printf("[MAC] STA MAC failed (netif=%d, wifi=%d)\n",
                       (int)e1, (int)e2);
     }
+#else
+    // Disabled by default for reliability; keep core-generated STA MAC.
+#endif // AP_USE_CUSTOM_MAC
 }   // <-- applyCustomSTAMac() closing brace
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,56 +138,88 @@ void SMNetworkManager::startAPMode() {
     Serial.println(F("[NetMgr] Starting Soft-AP..."));
     Logger::getInstance().warn("NetworkManager: Starting SoftAP fallback");
 
+    // Reset AP diagnostics state
+    _lastApDiagMs = 0;
+    _lastApStaCount = -1;
+
+    // Keep WiFi setup simple and deterministic in AP fallback mode.
+    // This path is intentionally minimal to maximize DHCP/ARP reliability on ESP32 core 3.x.
     WiFi.persistent(false);
     WiFi.setSleep(false);
-    WiFi.disconnect(true);
-    delay(100);
-    WiFi.mode(WIFI_AP);
-    delay(100);
 
+    _dnsServer.stop();
+
+    // Fully tear down any previous mode before starting AP.
+    WiFi.softAPdisconnect(true);
+    delay(80);
+    WiFi.disconnect(true);
+    delay(80);
+    WiFi.mode(WIFI_MODE_NULL);
+    delay(80);
+    WiFi.mode(WIFI_AP);
+    delay(120);
+
+    // Optional custom AP MAC (disabled by default; see AP_USE_CUSTOM_MAC).
     applyCustomAPMac();
 
     IPAddress apIP, apGW, apSN;
     apIP.fromString(AP_IP_ADDR);
     apGW.fromString(AP_GATEWAY);
     apSN.fromString(AP_SUBNET);
+
     bool apCfgOk = WiFi.softAPConfig(apIP, apGW, apSN);
     if (!apCfgOk) {
         Logger::getInstance().error("NetworkManager: SoftAP config failed");
         Serial.println(F("[NetMgr] ERROR: softAPConfig failed"));
     }
 
-    bool apStartOk = WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
+    // Prefer simple softAP() signature first; some builds are less stable with explicit channel/limits.
+    bool apStartOk = WiFi.softAP(AP_SSID, AP_PASS);
+    if (!apStartOk) {
+        Logger::getInstance().warn("NetworkManager: SoftAP simple start failed, retrying explicit channel");
+        apStartOk = WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
+    }
     if (!apStartOk) {
         Logger::getInstance().error("NetworkManager: SoftAP start failed");
         Serial.println(F("[NetMgr] ERROR: softAP start failed"));
     }
-    delay(150);
 
-    _apMode        = true;
-    _staMode       = false;
-    _wifiConnected = true;
-    _currentMac    = WiFi.softAPmacAddress();
-    if (WiFi.softAPIP() == IPAddress((uint32_t)0)) {
-        Logger::getInstance().warn("NetworkManager: SoftAP IP is 0.0.0.0 after start; retrying AP bring-up");
-        Serial.println(F("[NetMgr] WARN: SoftAP IP invalid after start, retrying..."));
+    delay(250);
+
+    // Retry once if AP IP did not latch or AP start reported failure
+    if (!apStartOk || WiFi.softAPIP() == IPAddress((uint32_t)0)) {
+        Logger::getInstance().warn("NetworkManager: SoftAP bring-up retry (IP invalid or start fail)");
+        Serial.println(F("[NetMgr] WARN: SoftAP retry..."));
         WiFi.softAPdisconnect(true);
-        delay(100);
+        delay(120);
         WiFi.mode(WIFI_AP);
-        delay(100);
+        delay(120);
         WiFi.softAPConfig(apIP, apGW, apSN);
-        WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
-        delay(200);
+        apStartOk = WiFi.softAP(AP_SSID, AP_PASS);
+        if (!apStartOk) apStartOk = WiFi.softAP(AP_SSID, AP_PASS, 1, false, 4);
+        delay(300);
     }
+
+    _apMode        = apStartOk;
+    _staMode       = false;
+    _wifiConnected = apStartOk;
+    _currentMac    = WiFi.softAPmacAddress();
 
     Serial.println(F("[NetMgr] Failed to connect as client. Starting AP Mode."));
     Serial.print  (F("[NetMgr] AP SSID : ")); Serial.println(F(AP_SSID));
     Serial.print  (F("[NetMgr] AP IP   : ")); Serial.println(WiFi.softAPIP());
     Serial.print  (F("[NetMgr] AP MAC  : ")); Serial.println(_currentMac);
+    Serial.printf("[NetMgr] AP CH   : %u\n", (unsigned)WiFi.channel());
 
-    _dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
-    Serial.println(F("[NetMgr] Captive portal DNS active (port 53)."));
-    Serial.printf("[NetMgr] AP stations connected: %d\n", WiFi.softAPgetStationNum());
+    if (apStartOk) {
+        _dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+        Serial.println(F("[NetMgr] Captive portal DNS active (port 53)."));
+    } else {
+        Serial.println(F("[NetMgr] ERROR: AP failed to start; DNS not started."));
+    }
+
+    _lastApStaCount = WiFi.softAPgetStationNum();
+    Serial.printf("[NetMgr] AP stations connected: %d\n", _lastApStaCount);
 }   // <-- startAPMode() closing brace  ← THIS WAS MISSING
 
 // ─────────────────────────────────────────────────────────────────────────────

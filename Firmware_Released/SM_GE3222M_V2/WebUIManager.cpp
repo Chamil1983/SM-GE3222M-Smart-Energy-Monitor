@@ -439,6 +439,7 @@ void WebUIManager::handleAsyncConfigPostBody(AsyncWebServerRequest* request, uin
 #else  // synchronous fallback
 
 void WebUIManager::handleRoot() {
+    Logger::getInstance().info("WebUI: GET / from %s (mode=%s)", _server.client().remoteIP().toString().c_str(), networkManager.isAPMode() ? "AP" : "STA");
     if (networkManager.isAPMode()) {
         String p = buildWiFiSetupPage();
         _server.send(200, "text/html", p);
@@ -448,6 +449,7 @@ void WebUIManager::handleRoot() {
 }
 
 void WebUIManager::handleIndex() {
+    Logger::getInstance().info("WebUI: GET /index.html from %s", _server.client().remoteIP().toString().c_str());
     if (SPIFFS.exists("/index.html")) {
         handleStaticFile("/index.html", "text/html");
         return;
@@ -520,6 +522,7 @@ void WebUIManager::handleCaptiveRedirect() {
 }
 
 void WebUIManager::handleNotFound() {
+    Logger::getInstance().info("WebUI: 404/CP %s from %s", _server.uri().c_str(), _server.client().remoteIP().toString().c_str());
     if (networkManager.isAPMode()) {
         handleCaptiveRedirect();
     } else {

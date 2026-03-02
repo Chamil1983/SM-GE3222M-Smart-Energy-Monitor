@@ -3,7 +3,7 @@
 /**
  * SM-GE3222M V2.0 - LCD UI Manager (20x4 I2C)
  *
- * Non-invasive LCD UI implementation that runs from Arduino loop()
+ * Non-invasive LCD UI implementation (services itself from a lightweight background task on ESP32)
  * to avoid interfering with existing Web UI/task scheduling.
  *
  * LCD: 20x4 HD44780 via I2C PCF8574 @ 0x27
@@ -155,6 +155,8 @@ private:
     uint32_t _lastUserInputMs;
     uint32_t _lastRenderMs;
     uint32_t _lastPhaseRotateMs;
+    uint32_t _lastLoopSliceMs;
+    uint32_t _lastMetricsUpdateMs;
 
     // Buttons
     ButtonTracker _btnMode;

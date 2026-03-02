@@ -14,6 +14,13 @@
 #define AP_GATEWAY          "192.168.4.1"
 #define AP_SUBNET           "255.255.255.0"
 
+// AP stability options (ESP32 core 3.x):
+// Using low-level AP/STA MAC overrides can break DHCP/ARP on some builds.
+// Keep disabled by default for reliable AP web serving.
+#ifndef AP_USE_CUSTOM_MAC
+#define AP_USE_CUSTOM_MAC    0
+#endif
+
 // ─── Hardware MAC Addresses ──────────────────────────────────────────────────
 #define WIFI_STA_MAC        "C8:2E:A3:F5:7D:DB"
 #define WIFI_AP_MAC         "C8:2E:A3:F5:7D:DC"
@@ -95,6 +102,9 @@ private:
     bool        _wifiConnected;
 
     String      _currentMac;
+
+    uint32_t    _lastApDiagMs;
+    int         _lastApStaCount;
 
     static bool parseMac(const char* macStr, uint8_t* macBytes);
     void applyCustomAPMac();
