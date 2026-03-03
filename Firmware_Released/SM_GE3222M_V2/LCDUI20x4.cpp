@@ -107,6 +107,8 @@ LCDUI20x4::LCDUI20x4()
     , _lastDemandSampleMs(0)
     , _peakPkwToday(0.0f)
     , _peakImaxToday(0.0f)
+    , _bootStartMs(0)
+    , _bootPhaseStampMs(0)
 {
     _btnMode.pin = PIN_BUTTON_MODE;
     _btnSet.pin  = PIN_BUTTON_SET;
@@ -148,13 +150,8 @@ bool LCDUI20x4::begin(uint8_t i2cAddr) {
 
     for (int i = 0; i < 4; ++i) _rowCache[i] = "";
 
-    // Splash (brief, non-invasive)
-    writeLine(0, "GE3222M BOOT", true);
-    writeLine(1, String("FW:") + FW_VERSION, true);
-    writeLine(2, "LCD UI 20x4 Ready", true);
-    writeLine(3, "WEB UI SAFE MODE", true);
-    delay(20);
-    yield();
+    // Boot splash (proposal-aligned, phase screens will follow from setup)
+    bootShowSplash();
 
     _state = UiState::RUN;
     _page = RunPage::LIVE_SUMMARY;
@@ -169,8 +166,94 @@ bool LCDUI20x4::begin(uint8_t i2cAddr) {
     (void)s_lcdUiTaskHandle; // background task disabled by design
 #endif
 
-    maybeRender(true);
+    // Keep boot screen until setup updates phase-by-phase sequence.
     return true;
+}
+
+
+void LCDUI20x4::bootShowSplash() {
+    if (!_lcdPresent || _impl == nullptr) return;
+    bootMarkPhase();
+    writeLine(0, "GE3222M BOOT", true);
+    writeLine(1, String("FW:") + FW_VERSION, true);
+    writeLine(2, String("Build:") + String(FW_BUILD_DATE), true);
+    writeLine(3, fit20(String("Init... ") + bootDurationCompact()), true);
+    yield();
+}
+
+void LCDUI20x4::bootShowStorage(bool nvsOk, bool spiffsOk) {
+    if (!_lcdPresent || _impl == nullptr) return;
+    bootMarkPhase();
+    writeLine(0, bootTitle("STORAGE"), true);
+    writeLine(1, bootKVLine("NVS", nvsOk ? "OK" : "FAIL"), true);
+    writeLine(2, bootKVLine("SPIFFS", spiffsOk ? "OK" : "FAIL"), true);
+    writeLine(3, fit20((nvsOk && spiffsOk ? String("Config Ready ") : String("Defaults Used ")) + bootDurationCompact()), true);
+    yield();
+}
+
+void LCDUI20x4::bootShowMeter(bool meterOk, bool safeMode) {
+    if (!_lcdPresent || _impl == nullptr) return;
+    bootMarkPhase();
+    writeLine(0, bootTitle("METER IC"), true);
+    writeLine(1, fit20("ATM90E36 Init..."), true);
+    writeLine(2, bootKVLine("METER", meterOk ? "OK" : "FAIL"), true);
+    writeLine(3, fit20(String((safeMode || !meterOk) ? "SAFE MODE " : "Calibration OK ") + bootDurationCompact()), true);
+    yield();
+}
+
+void LCDUI20x4::bootShowNetwork() {
+    if (!_lcdPresent || _impl == nullptr) return;
+    bootMarkPhase();
+
+    const bool sta = networkManager.isSTAMode();
+    const bool ap  = networkManager.isAPMode();
+    const bool con = networkManager.isConnected();
+    const String ip = fmtIpOrNA(networkManager.getIPAddress());
+
+    String ethLine = "ETH:DOWN";
+    String wifiState = String("WiFi:") + ((sta && con) ? "UP" : (sta ? "TRY" : "OFF"));
+    String apState   = String("AP:")   + (ap ? "ON" : "OFF");
+    String line2 = wifiState;
+    while (line2.length() < 11) line2 += ' ';
+    line2 += apState;
+
+    String line3 = String("IP:") + ip;
+    if (ap && (!con || ip == "N/A")) line3 = "IP:192.168.4.1";
+    if (!ap && !con && !sta) line3 = "IP:N/A";
+
+    writeLine(0, bootTitle("NETWORK"), true);
+    writeLine(1, fit20(ethLine), true);
+    writeLine(2, fit20(line2), true);
+    writeLine(3, fit20(line3), true);
+    yield();
+}
+
+void LCDUI20x4::bootShowServices(bool webOk, bool tcpOk, uint16_t tcpPort) {
+    if (!_lcdPresent || _impl == nullptr) return;
+    bootMarkPhase();
+
+    char webLine[24];
+    snprintf(webLine, sizeof(webLine), "WEB:80 %s", webOk ? "OK" : "OFF");
+
+    char tcpLine[24];
+    if (tcpOk) snprintf(tcpLine, sizeof(tcpLine), "TCP:%u OK", (unsigned)tcpPort);
+    else       snprintf(tcpLine, sizeof(tcpLine), "TCP:OFF");
+
+    writeLine(0, bootTitle("SERVICES"), true);
+    writeLine(1, fit20(String(webLine)), true);
+    writeLine(2, fit20(String(tcpLine)), true);
+    writeLine(3, fit20(String("MQTT:OFF ") + bootDurationCompact()), true);
+    yield();
+}
+
+void LCDUI20x4::bootSwitchToRun() {
+    if (!_initialized || !_lcdPresent || _impl == nullptr) return;
+    _state = UiState::RUN;
+    _page = RunPage::LIVE_SUMMARY;
+    _lastUserInputMs = millis();
+    _lastRenderMs = 0;
+    _lastPhaseRotateMs = millis();
+    maybeRender(true);
 }
 
 void LCDUI20x4::loop() {
@@ -512,6 +595,51 @@ String LCDUI20x4::fmtFloat(float v, uint8_t prec, uint8_t width) const {
 String LCDUI20x4::fmtIpOrNA(const String& s) const {
     if (s.length() == 0) return "N/A";
     return s;
+}
+
+String LCDUI20x4::bootTitle(const char* phaseName) const {
+    uint32_t now = millis();
+    uint32_t tMs = (_bootStartMs > 0) ? (now - _bootStartMs) : 0;
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%s t%lu.%02lus",
+             phaseName ? phaseName : "BOOT",
+             (unsigned long)(tMs / 1000UL),
+             (unsigned long)((tMs % 1000UL) / 10UL));
+    return String(buf);
+}
+
+String LCDUI20x4::bootDurationCompact() const {
+    uint32_t now = millis();
+    uint32_t dMs = (_bootPhaseStampMs > 0) ? (now - _bootPhaseStampMs) : 0;
+    char buf[24];
+    snprintf(buf, sizeof(buf), "d%lu.%02lus",
+             (unsigned long)(dMs / 1000UL),
+             (unsigned long)((dMs % 1000UL) / 10UL));
+    return String(buf);
+}
+
+String LCDUI20x4::bootKVLine(const char* key, const String& value, const char* suffix) const {
+    String out = "";
+    if (key && *key) {
+        out += key;
+        if (out.length() > 0 && out[out.length()-1] != ':') out += ':';
+    }
+    if (out.length() > 0 && out.length() < 6) out += ' ';
+    out += value;
+    if (suffix && *suffix) {
+        String sfx = String(" ") + suffix;
+        if (out.length() + sfx.length() <= 20) {
+            while (out.length() + sfx.length() < 20) out += ' ';
+            out += sfx;
+        }
+    }
+    return fit20(out);
+}
+
+void LCDUI20x4::bootMarkPhase() {
+    uint32_t now = millis();
+    if (_bootStartMs == 0) _bootStartMs = now;
+    _bootPhaseStampMs = now;
 }
 
 const char* LCDUI20x4::errorCodeToShort(ErrorCode e) const {

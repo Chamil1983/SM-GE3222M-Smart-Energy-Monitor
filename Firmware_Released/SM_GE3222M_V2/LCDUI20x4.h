@@ -21,6 +21,14 @@ public:
     void loop();
     bool isInitialized() const { return _initialized; }
 
+    // Boot sequence progress screens (non-invasive; safe no-op if LCD missing)
+    void bootShowSplash();
+    void bootShowStorage(bool nvsOk, bool spiffsOk);
+    void bootShowMeter(bool meterOk, bool safeMode = false);
+    void bootShowNetwork();
+    void bootShowServices(bool webOk, bool tcpOk, uint16_t tcpPort);
+    void bootSwitchToRun();
+
 private:
     LCDUI20x4();
     ~LCDUI20x4() = default;
@@ -108,6 +116,12 @@ private:
     String fmtFloat(float v, uint8_t prec, uint8_t width = 0) const;
     String fmtIpOrNA(const String& s) const;
     const char* errorCodeToShort(ErrorCode e) const;
+
+    // Boot screen formatting helpers (proposal-aligned fixed 20-char lines)
+    String bootTitle(const char* phaseName) const;
+    String bootDurationCompact() const;
+    String bootKVLine(const char* key, const String& value, const char* suffix = nullptr) const;
+    void bootMarkPhase();
 
     // Page renderers
     void renderPageLiveSummary();
@@ -207,5 +221,9 @@ private:
     uint32_t _lastDemandSampleMs;
     float _peakPkwToday;
     float _peakImaxToday;
+
+    // Boot sequence timing overlay (optional; shown on boot screens)
+    uint32_t _bootStartMs;
+    uint32_t _bootPhaseStampMs;
 };
 

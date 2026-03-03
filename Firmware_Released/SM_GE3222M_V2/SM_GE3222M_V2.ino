@@ -406,6 +406,9 @@ bool initPhase5_Communications() {
     SystemStatus st = SystemMonitor::getInstance().getSystemStatus();
     SystemMonitor::getInstance().setNetworkStatus(st.wifiConnected, st.wifiAPMode, st.wifiSTAMode, tcpOk, st.mqttConnected);
 
+    // LCD boot phase progress (services) - proposal-aligned summary screen
+    LCDUI20x4::getInstance().bootShowServices(webOk, tcpOk, tcpPort);
+
     return true;
 }
 
@@ -442,21 +445,32 @@ void setup() {
         g_lastError = ErrorCode::SYSTEM_PANIC;
         return;
     }
+
+    // Bring up LCD early for phase-by-phase boot progress (non-fatal, web path untouched)
+    bool lcdOk = LCDUI20x4::getInstance().begin(0x27);
+    printBootOptionalStep("LCD UI 20x4 (I2C 0x27)", lcdOk);
+    LCDUI20x4::getInstance().bootShowSplash();
     
     if (!initPhase2_Storage()) {
+        LCDUI20x4::getInstance().bootShowStorage(false, false);
         g_lastError = ErrorCode::NVS_INIT_FAILED;
         return;
     }
+    LCDUI20x4::getInstance().bootShowStorage(true, true);
     
     if (!initPhase3_EnergyMetering()) {
+        LCDUI20x4::getInstance().bootShowMeter(false, true);
         g_lastError = ErrorCode::ATM_INIT_FAILED;
         return;
     }
+    LCDUI20x4::getInstance().bootShowMeter(true, false);
     
     if (!initPhase4_Network()) {
+        LCDUI20x4::getInstance().bootShowNetwork();
         g_lastError = ErrorCode::NETWORK_INIT_FAILED;
         return;
     }
+    LCDUI20x4::getInstance().bootShowNetwork();
 
     if (!initPhase5_Communications()) {
         g_lastError = ErrorCode::MODBUS_INIT_ERROR;
@@ -487,10 +501,9 @@ void setup() {
     GPIOManager::getInstance().setLED(LED::FAULT, false);
     digitalWrite(LED_BUILTIN, LOW);
 
-    // Initialize LCD UI (non-fatal, does not modify Web UI path/files)
-    bool lcdOk = LCDUI20x4::getInstance().begin(0x27);
-    printBootOptionalStep("LCD UI 20x4 (I2C 0x27)", lcdOk);
-    
+    // Switch LCD from boot progress screens to normal RUN page 1
+    LCDUI20x4::getInstance().bootSwitchToRun();
+
     g_bootComplete = true;
 }
 
