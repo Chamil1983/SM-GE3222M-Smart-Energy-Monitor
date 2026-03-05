@@ -85,9 +85,9 @@ constexpr uint8_t PIN_MODBUS_DE         = 27;   // GPIO27 - Modbus DE/RE Control
 // ============================================================================
 // Ethernet Interface (W5500) - if used
 // ============================================================================
-constexpr uint8_t PIN_ETH_CS            = 15;   // GPIO15 - Ethernet CS
-constexpr uint8_t PIN_ETH_INT           = 35;   // GPIO35 - Ethernet Interrupt
-constexpr uint8_t PIN_ETH_RST           = 14;   // GPIO14 - Ethernet Reset
+constexpr uint8_t PIN_ETH_CS            = 14;   // GPIO14 - Ethernet CS
+constexpr uint8_t PIN_ETH_INT           = 35;   // GPIO35 - Ethernet Interrupt (Not connected)
+constexpr uint8_t PIN_ETH_RST           = 15;   // GPIO15 - Ethernet Reset (Not connected)
 
 // ============================================================================
 // LED Logic Levels (Active Low on MCP23017)

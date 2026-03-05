@@ -98,6 +98,16 @@ public:
     bool readPortB(uint8_t pin);
 
     /**
+     * Read MCP23017 Port A pin state (0-7). For active-low outputs, LOW means logical ON.
+     */
+    bool readPortA(uint8_t pin);
+
+    /**
+     * Write MCP23017 Port A output state with optional active-low mapping.
+     */
+    void writePortAOutput(uint8_t pin, bool state, bool activeLow = true);
+
+    /**
      * Check if MCP23017 is initialized
      */
     bool isInitialized() const { return m_initialized; }

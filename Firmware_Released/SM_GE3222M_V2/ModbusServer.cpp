@@ -70,38 +70,72 @@ bool ModbusServer::begin(const ModbusConfig& config) {
 
 
 void ModbusServer::setupRegisters() {
-    // IMPORTANT:
-    // The emelianov ModbusRTU library requires that callback address ranges map to
-    // registers that have been added. If the callback range is larger than the
-    // created map, the library can assert/abort() during callback registration.
+    // IMPORTANT (ESP32 stability fix):
+    // Creating the FULL sparse map (400 IR + 100 HR + coils/DI) with the emelianov
+    // Modbus library can exhaust/fragment heap during startup and trigger abort()
+    // inside addIreg/addHreg on ESP32.
     //
-    // Therefore we add the full configured ranges defined in ModbusMap.h.
+    // Callbacks are disabled in this firmware, so we only need to create the
+    // register addresses that are actually used by this project.
+    //
+    // This keeps startup heap usage low and avoids the PHASE 5 reset loop.
 #if defined(ARDUINO_ARCH_ESP32)
     const uint32_t heapBefore = ESP.getFreeHeap();
     Logger::getInstance().info("ModbusServer: Heap before map: %u bytes", (unsigned)heapBefore);
 #endif
 
-    for (uint16_t i = 0; i < MB_INPUT_REG_COUNT; i++) {
-        _modbusRTU.addIreg(i);
-        _modbusRTU.Ireg(i, 0);
-        if ((i % 64) == 0) delay(0); // yield
-    }
+    auto addIregRange = [this](uint16_t startAddr, uint16_t endAddr) {
+        for (uint16_t a = startAddr; a <= endAddr; ++a) {
+            _modbusRTU.addIreg(a);
+            _modbusRTU.Ireg(a, 0);
+            if (((a - startAddr) % 32U) == 0U) delay(0);
+        }
+    };
 
-    for (uint16_t i = 0; i < MB_HOLDING_REG_COUNT; i++) {
-        _modbusRTU.addHreg(i);
-        _modbusRTU.Hreg(i, 0);
-        if ((i % 32) == 0) delay(0); // yield
-    }
+    auto addHregRange = [this](uint16_t startAddr, uint16_t endAddr) {
+        for (uint16_t a = startAddr; a <= endAddr; ++a) {
+            _modbusRTU.addHreg(a);
+            _modbusRTU.Hreg(a, 0);
+            if (((a - startAddr) % 16U) == 0U) delay(0);
+        }
+    };
 
-    for (uint16_t i = 0; i < MB_COIL_COUNT; i++) {
-        _modbusRTU.addCoil(i);
-        _modbusRTU.Coil(i, false);
-    }
+    auto addCoilRange = [this](uint16_t startAddr, uint16_t endAddr) {
+        for (uint16_t a = startAddr; a <= endAddr; ++a) {
+            _modbusRTU.addCoil(a);
+            _modbusRTU.Coil(a, false);
+        }
+    };
 
-    for (uint16_t i = 0; i < MB_DISCRETE_INPUT_COUNT; i++) {
-        _modbusRTU.addIsts(i);
-        _modbusRTU.Ists(i, false);
-    }
+    auto addIstsRange = [this](uint16_t startAddr, uint16_t endAddr) {
+        for (uint16_t a = startAddr; a <= endAddr; ++a) {
+            _modbusRTU.addIsts(a);
+            _modbusRTU.Ists(a, false);
+        }
+    };
+
+    // Input registers actually used by updateMeterData()/updateSystemStatus()
+    // 0..67    = core instantaneous measurements (V/I/P/Q/S/PF/angles/THD/Freq/Neutral)
+    // 100..155 = energy + fundamental/harmonic power
+    // 200..205 = board/ambient sensor values
+    // 300..308 = uptime/status/system fields (some sparse inside block, contiguous kept for simplicity)
+    Logger::getInstance().info("ModbusServer: Add IR used ranges (0-67, 100-155, 200-205, 300-308)");
+    addIregRange(0, 67);
+    addIregRange(100, 155);
+    addIregRange(200, 205);
+    addIregRange(300, 308);
+
+    // Holding registers actually used (system control block)
+    Logger::getInstance().info("ModbusServer: Add HR used range (0-9)");
+    addHregRange(0, 9);
+
+    // Coils actually used (relay + status LEDs)
+    Logger::getInstance().info("ModbusServer: Add Coil used range (0-5)");
+    addCoilRange(0, 5);
+
+    // Discrete inputs actually used
+    Logger::getInstance().info("ModbusServer: Add DI used range (0-4)");
+    addIstsRange(0, 4);
 
 #if defined(ARDUINO_ARCH_ESP32)
     const uint32_t heapAfter = ESP.getFreeHeap();

@@ -67,6 +67,18 @@ bool SPIBus::init() {
     return init(PIN_SPI_SCK, PIN_SPI_MISO, PIN_SPI_MOSI, SPI_FREQUENCY_ATM90E36);
 }
 
+
+
+bool SPIBus::lock(uint32_t timeoutMs) {
+    if (m_mutex == nullptr) return false;
+    return xSemaphoreTake(m_mutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
+void SPIBus::unlock() {
+    if (m_mutex != nullptr) {
+        xSemaphoreGive(m_mutex);
+    }
+}
 uint16_t SPIBus::transfer16(uint8_t csPin, uint16_t data, uint32_t frequency, uint8_t mode) {
     if (!m_initialized) {
         return 0xFFFF;

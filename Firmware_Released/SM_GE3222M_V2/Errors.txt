@@ -1,0 +1,45 @@
+﻿Compiling 'SM_GE3222M_V2' for 'ESP32 Dev Module(esp32_esp32)'
+Build Folder: "file:///C:/Users/chami/AppData/Local/Temp/VMBuilds/SM_GE3222M_V2/esp32_esp32/Release"
+LCDUI20x4.cpp: In member function bool LCDUI20x4::begin(uint8_t)
+ 
+LCDUI20x4.cpp: 112:16: error: 'class LiquidCrystal_I2C' has no member named 'init
+   112 |     _impl->lcd.init()
+   |                ^~~~
+LCDUI20x4.cpp: In member function String LCDUI20x4::fmtFloat(float, uint8_t, uint8_t) const
+ 
+LCDUI20x4.cpp: 458:21: error: call of overloaded 'String(float&, uint8_t&)' is ambiguous
+   458 |     String s(v, prec)
+   |                     ^
+ 
+Arduino.h:194: In file included from
+LCDUI20x4.h:13: from
+LCDUI20x4.cpp:1: from
+WString.h:81: note  candidate  String  String(long long unsigned int, unsigned char)
+   81 |   explicit String(unsigned long long, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:80: note  candidate  String  String(long long int, unsigned char)
+   80 |   explicit String(long long, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:79: note  candidate  String  String(double, unsigned int)
+   79 |   explicit String(double, unsigned int decimalPlaces = 2)
+   |            ^~~~~~
+WString.h:78: note  candidate  String  String(float, unsigned int)
+   78 |   explicit String(float, unsigned int decimalPlaces = 2)
+   |            ^~~~~~
+WString.h:77: note  candidate  String  String(long unsigned int, unsigned char)
+   77 |   explicit String(unsigned long, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:76: note  candidate  String  String(long int, unsigned char)
+   76 |   explicit String(long, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:75: note  candidate  String  String(unsigned int, unsigned char)
+   75 |   explicit String(unsigned int, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:74: note  candidate  String  String(int, unsigned char)
+   74 |   explicit String(int, unsigned char base = 10)
+   |            ^~~~~~
+WString.h:73: note  candidate  String  String(unsigned char, unsigned char)
+   73 |   explicit String(unsigned char, unsigned char base = 10)
+   |            ^~~~~~
+Error compiling project sources
+Build failed for project 'SM_GE3222M_V2'

@@ -43,7 +43,7 @@
 #define WIFI_CONNECT_TIMEOUT_MS   10000UL
 
 // NVS namespace for WiFi config
-#define NVS_NAMESPACE_WIFI  "wifi_cfg"
+#define NVSMS_NAMESPACE_WIFI  "wifi_cfg"
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  WiFi configuration structure

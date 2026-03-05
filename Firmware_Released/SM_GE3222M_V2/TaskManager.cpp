@@ -14,11 +14,51 @@
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
 #endif
 #include "ConfigManager.h"
 #include "EventBus.h"
 #include "WatchdogManager.h"
 #include "DataLogger.h"
+
+
+namespace {
+static BaseType_t createPinnedTaskWithFallback(TaskFunction_t fn, const char* name, const uint32_t* stacks, size_t nStacks,
+                                              UBaseType_t prio, TaskHandle_t* outHandle, BaseType_t preferredCore) {
+    if (!fn || !name || !outHandle || !stacks || nStacks == 0) return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+
+    // Robust core fallback: some ESP32 Arduino builds are unicore (Core 0 only), so pinning to Core 1 fails even with ample heap.
+    BaseType_t coresToTry[3];
+    size_t nCores = 0;
+    coresToTry[nCores++] = preferredCore;
+    if (preferredCore != tskNO_AFFINITY) coresToTry[nCores++] = tskNO_AFFINITY;
+    if (preferredCore != 0 && preferredCore != tskNO_AFFINITY) coresToTry[nCores++] = 0;
+
+    for (size_t ci = 0; ci < nCores; ++ci) {
+        BaseType_t core = coresToTry[ci];
+        for (size_t i = 0; i < nStacks; ++i) {
+            *outHandle = nullptr;
+            BaseType_t r = xTaskCreatePinnedToCore(fn, name, stacks[i], nullptr, prio, outHandle, core);
+            if (r == pdPASS) {
+                Logger::getInstance().info("TaskManager: %s created stack=%u core=%d", name, (unsigned)stacks[i], (int)core);
+                return r;
+            }
+            Logger::getInstance().warn("TaskManager: %s create failed stack=%u core=%d", name, (unsigned)stacks[i], (int)core);
+            delay(1);
+        }
+    }
+    return errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY;
+}
+
+static BaseType_t createOptionalPinnedTask(TaskFunction_t fn, const char* name, uint32_t stack,
+                                           UBaseType_t prio, TaskHandle_t* outHandle, BaseType_t preferredCore) {
+    const uint32_t stacks[] = { stack, (stack > 3072 ? 3072U : stack), (stack > 2560 ? 2560U : stack), (stack > 2048 ? 2048U : stack) };
+    // Deduplicate stack values while preserving order
+    uint32_t uniq[4]; size_t n=0;
+    for (uint32_t v : stacks) { bool exists=false; for (size_t i=0;i<n;++i) if (uniq[i]==v) { exists=true; break; } if (!exists) uniq[n++]=v; }
+    return createPinnedTaskWithFallback(fn, name, uniq, n, prio, outHandle, preferredCore);
+}
+}
 
 TaskManager& TaskManager::getInstance() {
     static TaskManager instance;
@@ -48,57 +88,51 @@ bool TaskManager::createAllTasks() {
     }
     
     Logger::getInstance().info("TaskManager: Creating all tasks...");
+#if defined(ARDUINO_ARCH_ESP32)
+    Logger::getInstance().info("TaskManager: Heap free=%u internal=%u", (unsigned)ESP.getFreeHeap(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+#endif
     
     // Create Energy Task (Core 1, Priority 5)
-    BaseType_t result = xTaskCreatePinnedToCore(
-        energyTaskFunc,
-        "EnergyTask",
-        ENERGY_STACK_SIZE,
-        nullptr,
-        ENERGY_PRIORITY,
-        &_energyTask,
-        CORE_1
-    );
-    
+    const uint32_t energyStacks[] = { ENERGY_STACK_SIZE, 3072, 2560, 2048 };
+    BaseType_t result = createPinnedTaskWithFallback(
+        energyTaskFunc, "EnergyTask", energyStacks, sizeof(energyStacks)/sizeof(energyStacks[0]),
+        ENERGY_PRIORITY, &_energyTask, CORE_1);
     if (result != pdPASS) {
-        Logger::getInstance().error("TaskManager: Failed to create EnergyTask");
+        Logger::getInstance().error("TaskManager: Failed to create EnergyTask (all stack/core fallbacks exhausted)");
         return false;
     }
-    Logger::getInstance().info("TaskManager: Created EnergyTask on Core 1");
+    Logger::getInstance().info("TaskManager: EnergyTask created");
     
     // Create Accumulator Task (Core 1, Priority 4)
-    result = xTaskCreatePinnedToCore(
-        accumulatorTaskFunc,
-        "AccumulatorTask",
-        ACCUMULATOR_STACK_SIZE,
-        nullptr,
-        ACCUMULATOR_PRIORITY,
-        &_accumulatorTask,
-        CORE_1
-    );
+    {
+        const uint32_t stacks[] = { ACCUMULATOR_STACK_SIZE, 3072, 2560, 2048 };
+        result = createPinnedTaskWithFallback(
+            accumulatorTaskFunc, "AccumulatorTask", stacks, sizeof(stacks)/sizeof(stacks[0]),
+            ACCUMULATOR_PRIORITY, &_accumulatorTask, CORE_1);
+    }
     
     if (result != pdPASS) {
         Logger::getInstance().error("TaskManager: Failed to create AccumulatorTask");
+        if (_energyTask) { vTaskDelete(_energyTask); _energyTask = nullptr; }
         return false;
     }
-    Logger::getInstance().info("TaskManager: Created AccumulatorTask on Core 1");
+    Logger::getInstance().info("TaskManager: AccumulatorTask created");
     
     // Create Modbus Task (Core 1, Priority 3)
-    result = xTaskCreatePinnedToCore(
-        modbusTaskFunc,
-        "ModbusTask",
-        MODBUS_STACK_SIZE,
-        nullptr,
-        MODBUS_PRIORITY,
-        &_modbusTask,
-        CORE_1
-    );
+    {
+        const uint32_t stacks[] = { MODBUS_STACK_SIZE, 3072, 2560, 2048 };
+        result = createPinnedTaskWithFallback(
+            modbusTaskFunc, "ModbusTask", stacks, sizeof(stacks)/sizeof(stacks[0]),
+            MODBUS_PRIORITY, &_modbusTask, CORE_1);
+    }
     
     if (result != pdPASS) {
         Logger::getInstance().error("TaskManager: Failed to create ModbusTask");
+        if (_accumulatorTask) { vTaskDelete(_accumulatorTask); _accumulatorTask = nullptr; }
+        if (_energyTask) { vTaskDelete(_energyTask); _energyTask = nullptr; }
         return false;
     }
-    Logger::getInstance().info("TaskManager: Created ModbusTask on Core 1");
+    Logger::getInstance().info("TaskManager: ModbusTask created");
 
     // Create TCP Server Task (Core 0, Priority 2) - OPTIONAL
     // In AP setup mode, keep this task disabled (server.begin is skipped and we want Core0 headroom for WiFi/DNS).
@@ -106,11 +140,10 @@ bool TaskManager::createAllTasks() {
         _tcpServerTask = nullptr;
         Logger::getInstance().info("TaskManager: TCPServerTask skipped in AP mode");
     } else {
-        result = xTaskCreatePinnedToCore(
+        result = createOptionalPinnedTask(
             tcpServerTaskFunc,
             "TCPServerTask",
             TCP_SERVER_STACK_SIZE,
-            nullptr,
             TCP_SERVER_PRIORITY,
             &_tcpServerTask,
             CORE_0
@@ -129,11 +162,10 @@ bool TaskManager::createAllTasks() {
     // and avoids dependence on Arduino loop timing (LCD updates, etc.). Root page in AP mode is small (not SPIFFS-heavy).
     const bool enableWebUiTaskNow = ENABLE_WEBUI_TASK;
     if (enableWebUiTaskNow) {
-        result = xTaskCreatePinnedToCore(
+        result = createOptionalPinnedTask(
             webUiTaskFunc,
             "WebUITask",
             WEBUI_STACK_SIZE,
-            nullptr,
             WEBUI_PRIORITY,
             &_webUiTask,
             CORE_0
@@ -151,11 +183,10 @@ bool TaskManager::createAllTasks() {
     }
 
     // Create Diagnostics Task (Core 0, Priority 1) - OPTIONAL
-    result = xTaskCreatePinnedToCore(
+    result = createOptionalPinnedTask(
         diagnosticsTaskFunc,
         "DiagnosticsTask",
         DIAGNOSTICS_STACK_SIZE,
-        nullptr,
         DIAGNOSTICS_PRIORITY,
         &_diagnosticsTask,
         CORE_0
@@ -169,11 +200,10 @@ bool TaskManager::createAllTasks() {
     }
 
     // Create DHT Sensor Task (Core 0, Priority 1) - OPTIONAL
-    result = xTaskCreatePinnedToCore(
+    result = createOptionalPinnedTask(
         dhtTaskFunc,
         "DHTTask",
         DHT_STACK_SIZE,
-        nullptr,
         DHT_PRIORITY,
         &_dhtTask,
         CORE_0

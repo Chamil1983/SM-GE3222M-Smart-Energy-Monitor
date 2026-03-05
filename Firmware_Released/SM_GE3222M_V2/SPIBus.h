@@ -76,6 +76,14 @@ public:
      */
     bool writeRegister(uint8_t csPin, uint16_t address, uint16_t value);
 
+
+    /**
+     * Acquire/release raw SPI bus mutex for third-party SPI peripherals (e.g. W5500)
+     * that manage their own SPI transactions.
+     */
+    bool lock(uint32_t timeoutMs = 100);
+    void unlock();
+
     /**
      * Check if SPI bus is initialized
      */

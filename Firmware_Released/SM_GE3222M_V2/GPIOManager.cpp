@@ -266,3 +266,29 @@ bool GPIOManager::readPortB(uint8_t pin) {
     
     return state;
 }
+
+
+bool GPIOManager::readPortA(uint8_t pin) {
+    if (!m_initialized || pin > 7) {
+        return false;
+    }
+
+    if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return false;
+    }
+
+    bool state = m_mcp.digitalRead(pin);
+    xSemaphoreGive(m_mutex);
+    return state;
+}
+
+void GPIOManager::writePortAOutput(uint8_t pin, bool state, bool activeLow) {
+    if (!m_initialized || pin > 7) {
+        return;
+    }
+    if (xSemaphoreTake(m_mutex, pdMS_TO_TICKS(10)) != pdTRUE) {
+        return;
+    }
+    m_mcp.digitalWrite(pin, (activeLow ? (state ? LED_ON : LED_OFF) : (state ? HIGH : LOW)));
+    xSemaphoreGive(m_mutex);
+}

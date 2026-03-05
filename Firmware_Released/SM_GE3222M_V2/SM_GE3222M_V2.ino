@@ -59,6 +59,8 @@
 #include "WebUIManager.h"
 #include "ModbusServer.h"
 #include "TCPDataServer.h"
+#include "EthernetManager.h"
+#include "BACnetIntegration.h"
 
 // Core modules
 #include "TaskManager.h"
@@ -328,10 +330,10 @@ Serial.printf("    Totals: P=%.2fW Q=%.2fVAR S=%.2fVA PF=%.3f F=%.2fHz\n",
 }
 
 // ============================================================================
-// PHASE 4: NETWORK LAYER INITIALIZATION (WiFi STA -> AP fallback)
+// PHASE 5: NETWORK LAYER INITIALIZATION (WiFi STA -> AP fallback)
 // ============================================================================
 bool initPhase4_Network() {
-    printBootPhase("4", "Network Layer Initialization");
+    printBootPhase("5", "Network Layer Initialization");
 
     // Start WiFi using SMNetworkManager (STA first, fallback to AP)
     networkManager.begin();
@@ -343,27 +345,94 @@ bool initPhase4_Network() {
     if (staMode && connected) {
         checkBootStep("WiFi STA Connected", true);
         Serial.printf("  STA IP: %s\n", networkManager.getIPAddress().c_str());
-    } else if (apMode && connected) {
+    }
+    else if (apMode && connected) {
         checkBootStep("WiFi AP Started (Setup)", true);
         Serial.printf("  AP SSID: %s\n", networkManager.getSSID().c_str());
         Serial.printf("  AP IP: %s\n", networkManager.getIPAddress().c_str());
-    } else {
+    }
+    else {
         printBootOptionalStep("WiFi Network (disabled / failed)", false);
     }
 
-    // Publish status to SystemMonitor
+    // Start W5500 Ethernet (non-fatal, BACnet/IP uses this transport)
+    bool ethOk = EthernetManager::getInstance().begin();
+    if (ethOk && EthernetManager::getInstance().isIpReady()) {
+        checkBootStep("W5500 Ethernet Init", true);
+        Serial.printf("  ETH IP: %s\n", EthernetManager::getInstance().localIPString().c_str());
+    }
+    else if (EthernetManager::getInstance().isHardwareDetected()) {
+        checkBootStep("W5500 Ethernet Detected (IP pending background DHCP/static)", true);
+        Serial.printf("  ETH Link: %s\n", EthernetManager::getInstance().isLinkUp() ? "UP" : "DOWN");
+    }
+    else {
+        printBootOptionalStep("W5500 Ethernet Init (optional / retry in loop)", false);
+    }
+
+    // Publish preliminary network status
     SystemMonitor::getInstance().setNetworkStatus(connected, apMode, staMode, false, false);
+
+    // ------------------------------------------------------------------------
+    // Start network-dependent services ONLY AFTER network stack initialization
+    // ------------------------------------------------------------------------
+
+    // Web UI (HTTP + SPIFFS dashboard + WiFi setup page)
+    bool webOk = WebUIManager::getInstance().begin(80);
+    if (webOk) {
+        checkBootStep("Web UI HTTP Server (port 80)", true);
+    }
+    else {
+        printBootOptionalStep("Web UI HTTP Server (disabled / failed)", false);
+    }
+
+    // TCP JSON server (WiFi only)
+    bool tcpOk = false;
+    uint16_t tcpPort = 8080;
+
+    ModbusConfig modbusCfg;
+    ConfigManager::getInstance().loadModbusConfig(modbusCfg);
+    if (modbusCfg.tcpPort > 0) tcpPort = modbusCfg.tcpPort;
+
+    // In AP setup mode, keep TCP server off to free sockets/CPU for HTTP + captive portal stability.
+    if (networkManager.isAPMode()) {
+        printBootOptionalStep("TCP JSON Server (skipped in AP setup mode)", false);
+        Serial.println("   NOTE: TCP server disabled in AP mode to free WiFi resources.");
+    }
+    else {
+        tcpOk = TCPDataServer::getInstance().begin(tcpPort);
+        if (tcpOk) {
+            checkBootStep("TCP JSON Server (port configured)", true);
+            Serial.printf("  TCP Port: %u\n", (unsigned)tcpPort);
+        }
+        else {
+            printBootOptionalStep("TCP JSON Server (disabled / failed)", false);
+        }
+    }
+
+    // BACnet/IP integration (W5500 transport; starts automatically when Ethernet IP is ready)
+    BACnetIntegration::initialize();
+    BACnetIntegration::update();
+    printBootOptionalStep("BACnet/IP Integration (W5500)", true);
+
+    // Update status with TCP flag after service bring-up
+    SystemStatus st = SystemMonitor::getInstance().getSystemStatus();
+    SystemMonitor::getInstance().setNetworkStatus(
+        st.wifiConnected, st.wifiAPMode, st.wifiSTAMode, tcpOk, st.mqttConnected
+    );
+
+    // LCD boot phase progress (services summary)
+    LCDUI20x4::getInstance().bootShowServices(webOk, tcpOk, tcpPort);
 
     return true;
 }
 
 // ============================================================================
-// PHASE 5: COMMUNICATIONS INITIALIZATION (Modbus RTU + TCP JSON)
+// PHASE 4: COMMUNICATIONS INITIALIZATION (Modbus RTU + TCP JSON)
 // ============================================================================
 bool initPhase5_Communications() {
-    printBootPhase("5", "Communication Protocols Initialization");
+    printBootPhase("4", "Communication Protocols Initialization");
 
-    // Modbus RTU
+    // Modbus RTU only (network-independent)
     ModbusConfig modbusConfig;
     ConfigManager::getInstance().loadModbusConfig(modbusConfig);
 
@@ -376,38 +445,13 @@ bool initPhase5_Communications() {
     }
     SystemMonitor::getInstance().setModbusActive(modbusOk);
 
-    // Web UI (HTTP + SPIFFS dashboard + WiFi setup page)
-    bool webOk = WebUIManager::getInstance().begin(80);
-    if (webOk) {
-        checkBootStep("Web UI HTTP Server (port 80)", true);
-    } else {
-        printBootOptionalStep("Web UI HTTP Server (disabled / failed)", false);
-    }
+    // IMPORTANT: Defer Web/TCP/BACnet until Phase 5 after WiFi/Ethernet init
+    // to avoid ESP-IDF TCP/IP semaphore assert:
+    // assert failed: xQueueSemaphoreTake queue.c:1709 (( pxQueue ))
+    printBootOptionalStep("Network-dependent services deferred to Phase 5", true);
 
-    // TCP JSON server (WiFi only)
-    // In AP setup mode, keep TCP server off to free sockets/CPU for HTTP + captive portal stability.
-    bool tcpOk = false;
-    uint16_t tcpPort = 8080;
-    if (modbusConfig.tcpPort > 0) tcpPort = modbusConfig.tcpPort; // reuse field if provided
-    if (networkManager.isAPMode()) {
-        printBootOptionalStep("TCP JSON Server (skipped in AP setup mode)", false);
-        Serial.println("   NOTE: TCP server disabled in AP mode to free WiFi resources.");
-    } else {
-        tcpOk = TCPDataServer::getInstance().begin(tcpPort);
-        if (tcpOk) {
-            checkBootStep("TCP JSON Server (port configured)", true);
-            Serial.printf("  TCP Port: %u\n", (unsigned)tcpPort);
-        } else {
-            printBootOptionalStep("TCP JSON Server (disabled / failed)", false);
-        }
-    }
-
-    // Update status with TCP flag
-    SystemStatus st = SystemMonitor::getInstance().getSystemStatus();
-    SystemMonitor::getInstance().setNetworkStatus(st.wifiConnected, st.wifiAPMode, st.wifiSTAMode, tcpOk, st.mqttConnected);
-
-    // LCD boot phase progress (services) - proposal-aligned summary screen
-    LCDUI20x4::getInstance().bootShowServices(webOk, tcpOk, tcpPort);
+    // Optional LCD progress summary for this stage (no network services yet)
+    LCDUI20x4::getInstance().bootShowServices(false, false, 0);
 
     return true;
 }
@@ -465,17 +509,19 @@ void setup() {
     }
     LCDUI20x4::getInstance().bootShowMeter(true, false);
     
+    // Stage 4 first: communications (Modbus/TCP/Web services) before network/Ethernet bring-up.
+    if (!initPhase5_Communications()) {
+        g_lastError = ErrorCode::MODBUS_INIT_ERROR;
+        return;
+    }
+
+    // Stage 5 next: WiFi/Ethernet network layer initialization (AP/STA + optional W5500)
     if (!initPhase4_Network()) {
         LCDUI20x4::getInstance().bootShowNetwork();
         g_lastError = ErrorCode::NETWORK_INIT_FAILED;
         return;
     }
     LCDUI20x4::getInstance().bootShowNetwork();
-
-    if (!initPhase5_Communications()) {
-        g_lastError = ErrorCode::MODBUS_INIT_ERROR;
-        return;
-    }
     
     if (!initPhase6_Tasks()) {
         g_lastError = ErrorCode::TASK_CREATE_FAILED;
@@ -513,7 +559,9 @@ void setup() {
 void loop() {
     // Keep Web/DNS servicing in a single context (Arduino loop) for stable AP mode.
     networkManager.loop();
+    EthernetManager::getInstance().update();
     WebUIManager::getInstance().loop();
+    BACnetIntegration::update();
 
     // Run LCD UI cooperatively (internally throttled + anti-flicker) so it doesn't block web serving.
     LCDUI20x4::getInstance().loop();

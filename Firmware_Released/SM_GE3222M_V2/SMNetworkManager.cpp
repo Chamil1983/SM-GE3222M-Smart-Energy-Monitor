@@ -28,7 +28,7 @@ SMNetworkManager::SMNetworkManager()
 void SMNetworkManager::begin() {
     Serial.println(F("[NetMgr] Initialising..."));
     Logger::getInstance().info("NetworkManager: Initialising");
-    _prefs.begin(NVS_NAMESPACE_WIFI, false);
+    _prefs.begin(NVSMS_NAMESPACE_WIFI, false);
     loadConfigFromNVS();
     if (!startSTAMode()) {
         startAPMode();

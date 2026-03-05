@@ -1,0 +1,11 @@
+SM-GE3222M V2 Web AP Fix (Mar 1, 2026)
+
+Primary fix focus:
+- AP mode web portal stability after LCD UI integration
+- Reduce Core0 memory/CPU pressure in AP setup mode
+
+Changes:
+1) TaskManager: Do NOT create TCPServerTask when TCP server is skipped (AP mode)
+2) TaskManager: Increased WebUITask stack (8192 -> 12288 bytes)
+3) TaskManager: Added periodic WebUITask stack high-watermark logging
+4) SMNetworkManager: Hardened Soft-AP start and beacon config with return/error checks
